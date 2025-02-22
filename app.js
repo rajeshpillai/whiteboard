@@ -6,7 +6,8 @@ class Whiteboard {
     // Set smoothing properties for better line quality
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    this.ctx.lineWidth = 2; // adjust as needed
+    this.penLineWidth = 2; // default pen line width
+    this.eraserLineWidth = 10; // default eraser line width
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -19,6 +20,7 @@ class Whiteboard {
 
     this.bindEvents();
 
+    // Check if a drawing is loaded from URL
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -26,12 +28,10 @@ class Whiteboard {
     }
   }
 
-  // Ensure the resize method is defined
   resize() {
-    // Adjust canvas size (subtract sidebar width)
+    // Adjust canvas size; subtract sidebar width
     this.canvas.width = window.innerWidth - 150;
     this.canvas.height = window.innerHeight;
-    // Redraw saved image if available
     if (this.savedImage) {
       this.ctx.drawImage(this.savedImage, 0, 0);
     }
@@ -52,22 +52,35 @@ class Whiteboard {
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
 
-    // Tool selection
+    // Tool selection buttons
     const toolButtons = document.querySelectorAll('.tool-btn');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         this.currentTool = btn.dataset.tool;
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        toolButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       });
     });
 
+    // Save drawing button
     document.getElementById('save').addEventListener('click', () => this.saveDrawing());
+
+    // Handle eraser line width selection popup
+    const lineWidthIcon = document.getElementById('lineWidthIcon');
+    const lineWidthSelector = document.getElementById('lineWidthSelector');
+    lineWidthIcon.addEventListener('click', () => {
+      // Toggle visibility of the selector
+      lineWidthSelector.style.display = (lineWidthSelector.style.display === 'block') ? 'none' : 'block';
+    });
+
+    // Update eraser line width when slider value changes
+    document.getElementById('eraserWidth').addEventListener('input', (e) => {
+      this.eraserLineWidth = parseInt(e.target.value, 10);
+    });
   }
 
   onPointerDown(e) {
     e.preventDefault();
-    // Capture the pointer to ensure smooth continuous drawing
     e.target.setPointerCapture(e.pointerId);
     this.onMouseDown(e);
   }
@@ -95,10 +108,15 @@ class Whiteboard {
     const pos = this.getMousePos(e);
     this.startX = pos.x;
     this.startY = pos.y;
+    this.ctx.beginPath();
+    this.ctx.moveTo(pos.x, pos.y);
 
     if (this.currentTool === 'pen') {
-      this.ctx.beginPath();
-      this.ctx.moveTo(pos.x, pos.y);
+      this.ctx.globalCompositeOperation = 'source-over';
+      this.ctx.lineWidth = this.penLineWidth;
+    } else if (this.currentTool === 'eraser') {
+      this.ctx.globalCompositeOperation = 'destination-out';
+      this.ctx.lineWidth = this.eraserLineWidth;
     }
   }
 
@@ -106,7 +124,7 @@ class Whiteboard {
     if (!this.isDrawing) return;
     const pos = this.getMousePos(e);
 
-    if (this.currentTool === 'pen') {
+    if (this.currentTool === 'pen' || this.currentTool === 'eraser') {
       this.drawLine(pos.x, pos.y);
     } else if (this.currentTool === 'rect' || this.currentTool === 'circle') {
       this.redrawPreview(pos);
@@ -125,8 +143,13 @@ class Whiteboard {
       const radius = Math.sqrt(Math.pow(pos.x - this.startX, 2) + Math.pow(pos.y - this.startY, 2));
       this.drawCircle(this.startX, this.startY, radius);
       this.updateSavedImage();
-    } else if (this.currentTool === 'pen') {
+    } else if (this.currentTool === 'pen' || this.currentTool === 'eraser') {
+      this.drawLine(pos.x, pos.y);
       this.updateSavedImage();
+      // For eraser, revert to normal mode after finishing stroke
+      if (this.currentTool === 'eraser') {
+        this.ctx.globalCompositeOperation = 'source-over';
+      }
     }
   }
 
@@ -146,6 +169,7 @@ class Whiteboard {
   }
 
   redrawPreview(pos) {
+    // Clear the canvas and redraw saved image if available
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.savedImage) {
       this.ctx.drawImage(this.savedImage, 0, 0);

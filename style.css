@@ -34,9 +34,34 @@ body, html {
   background-color: #bbb;
 }
 
+/* Eraser container to hold the eraser button and its icon */
+.eraser-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tool-icon {
+  margin-left: 5px;
+  cursor: pointer;
+  font-size: 1.2em;
+}
+
+/* Popover for line width selection */
+#lineWidthSelector {
+  display: none;
+  position: absolute;
+  top: 35px;
+  left: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 5px;
+  z-index: 100;
+  font-size: 0.9em;
+}
+
 /* Canvas styling */
 #whiteboard {
-  touch-action: none;
   position: absolute;
   left: 150px;
   top: 0;
@@ -44,6 +69,5 @@ body, html {
   bottom: 0;
   background-color: #fff;
   cursor: crosshair;
+  touch-action: none; /* Prevent default touch gestures */
 }
-
-
