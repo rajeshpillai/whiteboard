@@ -1,0 +1,46 @@
+/* Reset and full height */
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
+
+/* Sidebar styling */
+#sidebar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 150px;
+  height: 100%;
+  background-color: #f0f0f0;
+  border-right: 1px solid #ccc;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.tool-btn {
+  display: block;
+  width: 100%;
+  margin: 5px 0;
+  padding: 8px;
+  cursor: pointer;
+  border: none;
+  background-color: #ddd;
+}
+
+.tool-btn.active {
+  background-color: #bbb;
+}
+
+/* Canvas styling */
+#whiteboard {
+  position: absolute;
+  left: 150px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #fff;
+  cursor: crosshair;
+}

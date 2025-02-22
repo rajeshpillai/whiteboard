@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Saved Drawings Gallery</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Additional gallery styling */
+    #gallery {
+      padding: 20px;
+      display: flex;
+      flex-wrap: wrap;
+    }
+    #gallery img {
+      width: 200px;
+      margin: 10px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    #gallery img:hover {
+      transform: scale(1.05);
+    }
+    h1 {
+      text-align: center;
+    }
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Saved Drawings Gallery</h1>
+  <div id="gallery"></div>
+  <a href="index.html" class="back-link">Back to Whiteboard</a>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const galleryDiv = document.getElementById('gallery');
+      let drawings = JSON.parse(localStorage.getItem('drawings')) || [];
+      
+      if (drawings.length === 0) {
+        galleryDiv.innerHTML = '<p>No drawings saved yet.</p>';
+        return;
+      }
+      
+      drawings.forEach(drawing => {
+        let img = document.createElement('img');
+        img.src = drawing.data;
+        // Wrap image in a link to open the whiteboard with this drawing loaded
+        let link = document.createElement('a');
+        link.href = 'index.html?id=' + drawing.id;
+        link.appendChild(img);
+        galleryDiv.appendChild(link);
+      });
+    });
+  </script>
+</body>
+</html>
