@@ -6,8 +6,9 @@ class Whiteboard {
     // Set smoothing properties for better line quality
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    this.penLineWidth = 2;   // default pen line width
-    this.eraserLineWidth = 10; // default eraser line width
+    this.penLineWidth = 2;    // default pen size
+    this.eraserLineWidth = 10; // default eraser size
+    this.currentColor = '#000000'; // default drawing color
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -29,9 +30,9 @@ class Whiteboard {
   }
 
   resize() {
-    // Adjust canvas size; subtract sidebar width
+    // Adjust canvas size; subtract sidebar width and top toolbar height
     this.canvas.width = window.innerWidth - 150;
-    this.canvas.height = window.innerHeight;
+    this.canvas.height = window.innerHeight - 40;
     if (this.savedImage) {
       this.ctx.drawImage(this.savedImage, 0, 0);
     }
@@ -71,22 +72,34 @@ class Whiteboard {
     lineWidthIcon.addEventListener('click', () => {
       lineWidthSelector.style.display = (lineWidthSelector.style.display === 'block') ? 'none' : 'block';
     });
-
     // Update eraser line width when slider value changes
     document.getElementById('eraserWidth').addEventListener('input', (e) => {
       this.eraserLineWidth = parseInt(e.target.value, 10);
     });
 
-    // Handle pen line width selection popup (reusing eraser UI pattern)
+    // Handle pen line width selection popup
     const penLineWidthIcon = document.getElementById('penLineWidthIcon');
     const penLineWidthSelector = document.getElementById('penLineWidthSelector');
     penLineWidthIcon.addEventListener('click', () => {
       penLineWidthSelector.style.display = (penLineWidthSelector.style.display === 'block') ? 'none' : 'block';
     });
-
     // Update pen line width when slider value changes
     document.getElementById('penWidth').addEventListener('input', (e) => {
       this.penLineWidth = parseInt(e.target.value, 10);
+    });
+
+    // Handle color toolbar buttons
+    const colorButtons = document.querySelectorAll('.color-btn');
+    colorButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.currentColor = btn.dataset.color;
+        document.getElementById('colorPicker').value = btn.dataset.color;
+      });
+    });
+
+    // Handle custom color picker
+    document.getElementById('colorPicker').addEventListener('input', (e) => {
+      this.currentColor = e.target.value;
     });
   }
 
@@ -125,16 +138,19 @@ class Whiteboard {
     if (this.currentTool === 'pen') {
       this.ctx.globalCompositeOperation = 'source-over';
       this.ctx.lineWidth = this.penLineWidth;
+      this.ctx.strokeStyle = this.currentColor;
     } else if (this.currentTool === 'eraser') {
       this.ctx.globalCompositeOperation = 'destination-out';
       this.ctx.lineWidth = this.eraserLineWidth;
+    } else if (this.currentTool === 'rect' || this.currentTool === 'circle') {
+      // For shapes, set the stroke color to the current color.
+      this.ctx.strokeStyle = this.currentColor;
     }
   }
 
   onMouseMove(e) {
     if (!this.isDrawing) return;
     const pos = this.getMousePos(e);
-
     if (this.currentTool === 'pen' || this.currentTool === 'eraser') {
       this.drawLine(pos.x, pos.y);
     } else if (this.currentTool === 'rect' || this.currentTool === 'circle') {
@@ -186,6 +202,7 @@ class Whiteboard {
     const width = pos.x - this.startX;
     const height = pos.y - this.startY;
     this.ctx.save();
+    // Preview in a different color (here, red) to indicate it's a guide.
     this.ctx.strokeStyle = 'red';
     if (this.currentTool === 'rect') {
       this.ctx.strokeRect(this.startX, this.startY, width, height);
