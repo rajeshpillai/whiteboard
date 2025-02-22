@@ -8,7 +8,14 @@
 <body>
   <div id="sidebar">
     <h2>Tools</h2>
-    <button id="tool-pen" class="tool-btn active" data-tool="pen">Pen</button>
+    <div class="pen-container">
+      <button id="tool-pen" class="tool-btn active" data-tool="pen">Pen</button>
+      <span id="penLineWidthIcon" class="tool-icon" title="Set Pen Size">⚙️</span>
+      <div id="penLineWidthSelector">
+        <label for="penWidth">Size:</label>
+        <input type="range" id="penWidth" min="1" max="20" value="2">
+      </div>
+    </div>
     <button id="tool-rect" class="tool-btn" data-tool="rect">Rectangle</button>
     <button id="tool-circle" class="tool-btn" data-tool="circle">Circle</button>
     <button id="tool-eraser" class="tool-btn" data-tool="eraser">Eraser</button>

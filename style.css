@@ -34,6 +34,13 @@ body, html {
   background-color: #bbb;
 }
 
+/* Pen container to hold the pen button and its icon */
+.pen-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 /* Eraser container to hold the eraser button and its icon */
 .eraser-container {
   position: relative;
@@ -47,8 +54,8 @@ body, html {
   font-size: 1.2em;
 }
 
-/* Popover for line width selection */
-#lineWidthSelector {
+/* Popover for size selection */
+#penLineWidthSelector, #lineWidthSelector {
   display: none;
   position: absolute;
   top: 35px;

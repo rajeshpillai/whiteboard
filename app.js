@@ -6,7 +6,7 @@ class Whiteboard {
     // Set smoothing properties for better line quality
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    this.penLineWidth = 2; // default pen line width
+    this.penLineWidth = 2;   // default pen line width
     this.eraserLineWidth = 10; // default eraser line width
 
     this.resize();
@@ -69,13 +69,24 @@ class Whiteboard {
     const lineWidthIcon = document.getElementById('lineWidthIcon');
     const lineWidthSelector = document.getElementById('lineWidthSelector');
     lineWidthIcon.addEventListener('click', () => {
-      // Toggle visibility of the selector
       lineWidthSelector.style.display = (lineWidthSelector.style.display === 'block') ? 'none' : 'block';
     });
 
     // Update eraser line width when slider value changes
     document.getElementById('eraserWidth').addEventListener('input', (e) => {
       this.eraserLineWidth = parseInt(e.target.value, 10);
+    });
+
+    // Handle pen line width selection popup (reusing eraser UI pattern)
+    const penLineWidthIcon = document.getElementById('penLineWidthIcon');
+    const penLineWidthSelector = document.getElementById('penLineWidthSelector');
+    penLineWidthIcon.addEventListener('click', () => {
+      penLineWidthSelector.style.display = (penLineWidthSelector.style.display === 'block') ? 'none' : 'block';
+    });
+
+    // Update pen line width when slider value changes
+    document.getElementById('penWidth').addEventListener('input', (e) => {
+      this.penLineWidth = parseInt(e.target.value, 10);
     });
   }
 
@@ -146,7 +157,6 @@ class Whiteboard {
     } else if (this.currentTool === 'pen' || this.currentTool === 'eraser') {
       this.drawLine(pos.x, pos.y);
       this.updateSavedImage();
-      // For eraser, revert to normal mode after finishing stroke
       if (this.currentTool === 'eraser') {
         this.ctx.globalCompositeOperation = 'source-over';
       }
@@ -169,7 +179,6 @@ class Whiteboard {
   }
 
   redrawPreview(pos) {
-    // Clear the canvas and redraw saved image if available
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (this.savedImage) {
       this.ctx.drawImage(this.savedImage, 0, 0);
