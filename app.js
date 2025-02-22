@@ -12,7 +12,7 @@ class Tool {
 class RoundPen extends Tool {
   constructor(whiteboard) {
     super(whiteboard);
-    // Default properties; these will be updated from the whiteboard state on each stroke.
+    // Default properties will be updated from the whiteboard state on each stroke.
     this.lineWidth = whiteboard.penLineWidth;
     this.color = whiteboard.currentColor;
   }
@@ -23,7 +23,6 @@ class RoundPen extends Tool {
     ctx.lineWidth = this.lineWidth;
     ctx.strokeStyle = this.color;
     ctx.globalCompositeOperation = 'source-over';
-    // Ensure proper smoothing
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
   }
@@ -33,32 +32,59 @@ class RoundPen extends Tool {
     ctx.stroke();
   }
   onMouseUp(pos) {
-    // Optionally finalize stroke if needed.
+    // Optional: finalize the stroke if needed.
   }
 }
 
-// Future pen types can be added here, e.g., a SquarePen or a calligraphy pen.
+// A FlatPen tool – draws with flat (butt) caps and sharp (miter) joins.
+class FlatPen extends Tool {
+  constructor(whiteboard) {
+    super(whiteboard);
+    this.lineWidth = whiteboard.penLineWidth;
+    this.color = whiteboard.currentColor;
+  }
+  onMouseDown(pos) {
+    const ctx = this.whiteboard.ctx;
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.lineWidth = this.lineWidth;
+    ctx.strokeStyle = this.color;
+    ctx.globalCompositeOperation = 'source-over';
+    // Use flat stroke settings:
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+  }
+  onMouseMove(pos) {
+    const ctx = this.whiteboard.ctx;
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
+  onMouseUp(pos) {
+    // Nothing extra needed.
+  }
+}
 
 class Whiteboard {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
 
-    // Set smoothing properties for non-pen tools
+    // Set smoothing properties for non-tool-specific drawing.
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
 
-    // Default pen and eraser sizes and colors
+    // Default sizes and colors.
     this.penLineWidth = 2;       // default pen size
     this.eraserLineWidth = 10;   // default eraser size
-    this.currentColor = '#000000'; // default color
+    this.currentColor = '#000000'; // default drawing color
 
     // Instantiate available pen types.
-    // For now, we have only a "round" pen.
+    // You now have both a "round" and a "flat" pen.
     this.penTools = {
-      round: new RoundPen(this)
-      // Additional pen types (e.g., square: new SquarePen(this)) can be added here.
+      round: new RoundPen(this),
+      flat: new FlatPen(this)
     };
+    // Default pen tool can remain "round", or you could change to "flat".
     this.currentPenType = 'round';
 
     this.resize();
@@ -73,7 +99,7 @@ class Whiteboard {
 
     this.bindEvents();
 
-    // Load a drawing if an id is provided in the URL.
+    // Check if a drawing is loaded from URL.
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -105,14 +131,28 @@ class Whiteboard {
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
 
-    // Tool selection buttons.
-    const toolButtons = document.querySelectorAll('.tool-btn');
+    // Tool selection buttons (for non-pen tools)
+    const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         this.currentTool = btn.dataset.tool;
         toolButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       });
+    });
+
+    // Specifically for pen type selection:
+    document.getElementById('tool-pen').addEventListener('click', () => {
+      this.currentTool = 'pen';
+      this.currentPenType = 'round';
+    });
+    document.getElementById('tool-flat-pen').addEventListener('click', () => {
+      this.currentTool = 'pen';
+      this.currentPenType = 'flat';
+      // Optionally update active states if you want to visually differentiate
+      // between round and flat pen selection.
+      toolButtons.forEach(b => b.classList.remove('active'));
+      document.getElementById('tool-flat-pen').classList.add('active');
     });
 
     // Save drawing button.
@@ -138,16 +178,19 @@ class Whiteboard {
       this.penLineWidth = parseInt(e.target.value, 10);
     });
 
-    // Handle color toolbar buttons.
+   // Handle color toolbar buttons.
     const colorButtons = document.querySelectorAll('.color-btn');
     colorButtons.forEach(btn => {
       btn.addEventListener('click', () => {
+        // Remove active class from all color buttons.
+        colorButtons.forEach(b => b.classList.remove('active'));
+        // Add active class to the clicked button.
+        btn.classList.add('active');
+        // Update the current drawing color.
         this.currentColor = btn.dataset.color;
+        // Update the color picker's value.
         document.getElementById('colorPicker').value = btn.dataset.color;
       });
-    });
-    document.getElementById('colorPicker').addEventListener('input', (e) => {
-      this.currentColor = e.target.value;
     });
   }
 
@@ -180,21 +223,20 @@ class Whiteboard {
     const pos = this.getMousePos(e);
     this.startX = pos.x;
     this.startY = pos.y;
-    // For pen, delegate to the current pen tool.
+
     if (this.currentTool === 'pen') {
+      // Delegate to the selected pen tool.
       let penTool = this.penTools[this.currentPenType];
       // Update pen tool properties from the whiteboard state.
       penTool.lineWidth = this.penLineWidth;
       penTool.color = this.currentColor;
       penTool.onMouseDown(pos);
     } else if (this.currentTool === 'eraser') {
-      // Eraser logic.
       this.ctx.beginPath();
       this.ctx.moveTo(pos.x, pos.y);
       this.ctx.globalCompositeOperation = 'destination-out';
       this.ctx.lineWidth = this.eraserLineWidth;
     } else if (this.currentTool === 'rect' || this.currentTool === 'circle') {
-      // For shapes, store the starting position.
       this.ctx.beginPath();
       this.ctx.moveTo(pos.x, pos.y);
       this.ctx.strokeStyle = this.currentColor;

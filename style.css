@@ -30,6 +30,11 @@ body, html {
   cursor: pointer;
 }
 
+.color-btn.active {
+  border: 2px solid #000; /* Example: a black border indicates the active color */
+}
+
+
 /* Sidebar styling */
 #sidebar {
   position: absolute;
