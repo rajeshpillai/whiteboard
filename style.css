@@ -31,15 +31,14 @@ body, html {
 }
 
 .color-btn.active {
-  border: 2px solid #000; /* Example: a black border indicates the active color */
+  border: 2px solid #000;
 }
-
 
 /* Sidebar styling */
 #sidebar {
   position: absolute;
   left: 0;
-  top: 40px; /* push down to leave room for the top toolbar */
+  top: 40px;
   width: 150px;
   height: calc(100% - 40px);
   background-color: #f0f0f0;
@@ -62,8 +61,8 @@ body, html {
   background-color: #bbb;
 }
 
-/* Pen and eraser containers */
-.pen-container, .eraser-container {
+/* Containers for pen tool buttons */
+.pen-container, .pen-type-container, .eraser-container {
   position: relative;
   display: flex;
   align-items: center;
@@ -97,5 +96,5 @@ body, html {
   bottom: 0;
   background-color: #fff;
   cursor: crosshair;
-  touch-action: none; /* Prevent default touch gestures */
+  touch-action: none;
 }

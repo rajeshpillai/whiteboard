@@ -8,7 +8,7 @@ class Tool {
   onMouseUp(pos) {}
 }
 
-// RoundPen: draws with round line caps and joins.
+// RoundPen: draws with round line caps and joins using a constant width.
 class RoundPen extends Tool {
   constructor(whiteboard) {
     super(whiteboard);
@@ -19,8 +19,7 @@ class RoundPen extends Tool {
     const ctx = this.whiteboard.ctx;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
-    ctx.lineWidth = computedWidth;
+    ctx.lineWidth = this.lineWidth;
     ctx.strokeStyle = this.color;
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
@@ -28,17 +27,14 @@ class RoundPen extends Tool {
   }
   onMouseMove(pos) {
     const ctx = this.whiteboard.ctx;
-    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
-    ctx.lineWidth = computedWidth;
+    ctx.lineWidth = this.lineWidth;
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   }
-  onMouseUp(pos) {
-    // Optional finalization
-  }
+  onMouseUp(pos) {}
 }
 
-// FlatPen: draws with flat (butt) caps and miter joins.
+// FlatPen: draws with flat (butt) caps and miter joins using a constant width.
 class FlatPen extends Tool {
   constructor(whiteboard) {
     super(whiteboard);
@@ -49,8 +45,7 @@ class FlatPen extends Tool {
     const ctx = this.whiteboard.ctx;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
-    ctx.lineWidth = computedWidth;
+    ctx.lineWidth = this.lineWidth;
     ctx.strokeStyle = this.color;
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'butt';
@@ -58,13 +53,80 @@ class FlatPen extends Tool {
   }
   onMouseMove(pos) {
     const ctx = this.whiteboard.ctx;
-    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
-    ctx.lineWidth = computedWidth;
+    ctx.lineWidth = this.lineWidth;
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   }
+  onMouseUp(pos) {}
+}
+
+// BrushPen: supports pressure by recording points (with pressure) and then drawing a variable‑width stroke.
+class BrushPen extends Tool {
+  constructor(whiteboard) {
+    super(whiteboard);
+    this.lineWidth = whiteboard.penLineWidth; // base width
+    this.color = whiteboard.currentColor;
+    this.points = [];
+  }
+  onMouseDown(pos) {
+    this.points = [];
+    this.points.push(pos);
+  }
+  onMouseMove(pos) {
+    this.points.push(pos);
+    // Optional live feedback: draw a small circle at the current point.
+    const ctx = this.whiteboard.ctx;
+    ctx.save();
+    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, computedWidth / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   onMouseUp(pos) {
-    // Optional finalization
+    this.points.push(pos);
+    this.drawStroke();
+  }
+  drawStroke() {
+    const pts = this.points;
+    if (pts.length < 2) return;
+    const ctx = this.whiteboard.ctx;
+    let left = [], right = [];
+    for (let i = 0; i < pts.length; i++) {
+      let p = pts[i];
+      let dx, dy;
+      if (i === 0) {
+        dx = pts[i + 1].x - p.x;
+        dy = pts[i + 1].y - p.y;
+      } else if (i === pts.length - 1) {
+        dx = p.x - pts[i - 1].x;
+        dy = p.y - pts[i - 1].y;
+      } else {
+        dx = pts[i + 1].x - pts[i - 1].x;
+        dy = pts[i + 1].y - pts[i - 1].y;
+      }
+      let len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) { dx = 0; dy = 0; } else { dx /= len; dy /= len; }
+      let perpX = -dy, perpY = dx;
+      let width = this.whiteboard.calculateLineWidth(this.lineWidth, p.pressure);
+      let offset = width / 2;
+      left.push({ x: p.x + perpX * offset, y: p.y + perpY * offset });
+      right.push({ x: p.x - perpX * offset, y: p.y - perpY * offset });
+    }
+    ctx.beginPath();
+    if (left.length > 0) {
+      ctx.moveTo(left[0].x, left[0].y);
+      for (let i = 1; i < left.length; i++) {
+        ctx.lineTo(left[i].x, left[i].y);
+      }
+      for (let i = right.length - 1; i >= 0; i--) {
+        ctx.lineTo(right[i].x, right[i].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = this.color;
+      ctx.fill();
+    }
   }
 }
 
@@ -78,10 +140,11 @@ class Whiteboard {
     this.eraserLineWidth = 10;
     this.currentColor = '#000000';
 
-    // Instantiate available pen tools.
+    // Instantiate pen tools: round, flat, and brush.
     this.penTools = {
       round: new RoundPen(this),
-      flat: new FlatPen(this)
+      flat: new FlatPen(this),
+      brush: new BrushPen(this)
     };
     // Default pen type.
     this.currentPenType = 'round';
@@ -98,7 +161,7 @@ class Whiteboard {
 
     this.bindEvents();
 
-    // Load drawing if URL parameter provided.
+    // Load drawing if provided in URL.
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -135,7 +198,7 @@ class Whiteboard {
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
 
-    // Tool selection for elements with data-tool.
+    // Tool selection buttons for elements with data-tool.
     const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -153,9 +216,14 @@ class Whiteboard {
     document.getElementById('tool-flat-pen').addEventListener('click', () => {
       this.currentTool = 'pen';
       this.currentPenType = 'flat';
-      // Update active state.
       toolButtons.forEach(b => b.classList.remove('active'));
       document.getElementById('tool-flat-pen').classList.add('active');
+    });
+    document.getElementById('tool-brush-pen').addEventListener('click', () => {
+      this.currentTool = 'pen';
+      this.currentPenType = 'brush';
+      toolButtons.forEach(b => b.classList.remove('active'));
+      document.getElementById('tool-brush-pen').classList.add('active');
     });
 
     // Save drawing.
