@@ -8,11 +8,10 @@ class Tool {
   onMouseUp(pos) {}
 }
 
-// A RoundPen tool – draws with round line caps.
+// RoundPen: draws with round line caps and joins.
 class RoundPen extends Tool {
   constructor(whiteboard) {
     super(whiteboard);
-    // Default properties will be updated from the whiteboard state on each stroke.
     this.lineWidth = whiteboard.penLineWidth;
     this.color = whiteboard.currentColor;
   }
@@ -20,7 +19,8 @@ class RoundPen extends Tool {
     const ctx = this.whiteboard.ctx;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    ctx.lineWidth = this.lineWidth;
+    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
+    ctx.lineWidth = computedWidth;
     ctx.strokeStyle = this.color;
     ctx.globalCompositeOperation = 'source-over';
     ctx.lineCap = 'round';
@@ -28,15 +28,17 @@ class RoundPen extends Tool {
   }
   onMouseMove(pos) {
     const ctx = this.whiteboard.ctx;
+    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
+    ctx.lineWidth = computedWidth;
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   }
   onMouseUp(pos) {
-    // Optional: finalize the stroke if needed.
+    // Optional finalization
   }
 }
 
-// A FlatPen tool – draws with flat (butt) caps and sharp (miter) joins.
+// FlatPen: draws with flat (butt) caps and miter joins.
 class FlatPen extends Tool {
   constructor(whiteboard) {
     super(whiteboard);
@@ -47,20 +49,22 @@ class FlatPen extends Tool {
     const ctx = this.whiteboard.ctx;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
-    ctx.lineWidth = this.lineWidth;
+    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
+    ctx.lineWidth = computedWidth;
     ctx.strokeStyle = this.color;
     ctx.globalCompositeOperation = 'source-over';
-    // Use flat stroke settings:
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'miter';
   }
   onMouseMove(pos) {
     const ctx = this.whiteboard.ctx;
+    let computedWidth = this.whiteboard.calculateLineWidth(this.lineWidth, pos.pressure);
+    ctx.lineWidth = computedWidth;
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   }
   onMouseUp(pos) {
-    // Nothing extra needed.
+    // Optional finalization
   }
 }
 
@@ -69,28 +73,23 @@ class Whiteboard {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
 
-    // Set smoothing properties for non-tool-specific drawing.
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
+    // Default sizes and color.
+    this.penLineWidth = 2;
+    this.eraserLineWidth = 10;
+    this.currentColor = '#000000';
 
-    // Default sizes and colors.
-    this.penLineWidth = 2;       // default pen size
-    this.eraserLineWidth = 10;   // default eraser size
-    this.currentColor = '#000000'; // default drawing color
-
-    // Instantiate available pen types.
-    // You now have both a "round" and a "flat" pen.
+    // Instantiate available pen tools.
     this.penTools = {
       round: new RoundPen(this),
       flat: new FlatPen(this)
     };
-    // Default pen tool can remain "round", or you could change to "flat".
+    // Default pen type.
     this.currentPenType = 'round';
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    // currentTool can be: 'pen', 'eraser', 'rect', or 'circle'
+    // Current tool: 'pen', 'eraser', 'rect', or 'circle'
     this.currentTool = 'pen';
     this.isDrawing = false;
     this.startX = 0;
@@ -99,7 +98,7 @@ class Whiteboard {
 
     this.bindEvents();
 
-    // Check if a drawing is loaded from URL.
+    // Load drawing if URL parameter provided.
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -108,7 +107,7 @@ class Whiteboard {
   }
 
   resize() {
-    // Adjust canvas size; subtract sidebar width and top toolbar height.
+    // Adjust canvas size (subtract sidebar width and top toolbar height).
     this.canvas.width = window.innerWidth - 150;
     this.canvas.height = window.innerHeight - 40;
     if (this.savedImage) {
@@ -116,22 +115,27 @@ class Whiteboard {
     }
   }
 
+  // Helper to compute effective line width based on pressure.
+  calculateLineWidth(defaultWidth, pressure) {
+    if (pressure === undefined || pressure < 0.1) return defaultWidth;
+    return Math.max(defaultWidth * pressure, 1);
+  }
+
   bindEvents() {
-    // Use pointer events if supported.
+    // Use pointer events if available.
     if (window.PointerEvent) {
       this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
       this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
       this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
       this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
     } else {
-      // Fallback to mouse events.
       this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
       this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
       this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
 
-    // Tool selection buttons (for non-pen tools)
+    // Tool selection for elements with data-tool.
     const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -141,7 +145,7 @@ class Whiteboard {
       });
     });
 
-    // Specifically for pen type selection:
+    // Specific pen type buttons.
     document.getElementById('tool-pen').addEventListener('click', () => {
       this.currentTool = 'pen';
       this.currentPenType = 'round';
@@ -149,16 +153,15 @@ class Whiteboard {
     document.getElementById('tool-flat-pen').addEventListener('click', () => {
       this.currentTool = 'pen';
       this.currentPenType = 'flat';
-      // Optionally update active states if you want to visually differentiate
-      // between round and flat pen selection.
+      // Update active state.
       toolButtons.forEach(b => b.classList.remove('active'));
       document.getElementById('tool-flat-pen').classList.add('active');
     });
 
-    // Save drawing button.
+    // Save drawing.
     document.getElementById('save').addEventListener('click', () => this.saveDrawing());
 
-    // Handle eraser size selection popup.
+    // Eraser size popup.
     const lineWidthIcon = document.getElementById('lineWidthIcon');
     const lineWidthSelector = document.getElementById('lineWidthSelector');
     lineWidthIcon.addEventListener('click', () => {
@@ -168,7 +171,7 @@ class Whiteboard {
       this.eraserLineWidth = parseInt(e.target.value, 10);
     });
 
-    // Handle pen size selection popup.
+    // Pen size popup.
     const penLineWidthIcon = document.getElementById('penLineWidthIcon');
     const penLineWidthSelector = document.getElementById('penLineWidthSelector');
     penLineWidthIcon.addEventListener('click', () => {
@@ -178,19 +181,18 @@ class Whiteboard {
       this.penLineWidth = parseInt(e.target.value, 10);
     });
 
-   // Handle color toolbar buttons.
+    // Color toolbar.
     const colorButtons = document.querySelectorAll('.color-btn');
     colorButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        // Remove active class from all color buttons.
         colorButtons.forEach(b => b.classList.remove('active'));
-        // Add active class to the clicked button.
         btn.classList.add('active');
-        // Update the current drawing color.
         this.currentColor = btn.dataset.color;
-        // Update the color picker's value.
         document.getElementById('colorPicker').value = btn.dataset.color;
       });
+    });
+    document.getElementById('colorPicker').addEventListener('input', (e) => {
+      this.currentColor = e.target.value;
     });
   }
 
@@ -220,14 +222,13 @@ class Whiteboard {
 
   onMouseDown(e) {
     this.isDrawing = true;
-    const pos = this.getMousePos(e);
+    let pos = this.getMousePos(e);
+    pos.pressure = (e.pressure !== undefined) ? e.pressure : 0.5;
     this.startX = pos.x;
     this.startY = pos.y;
 
     if (this.currentTool === 'pen') {
-      // Delegate to the selected pen tool.
       let penTool = this.penTools[this.currentPenType];
-      // Update pen tool properties from the whiteboard state.
       penTool.lineWidth = this.penLineWidth;
       penTool.color = this.currentColor;
       penTool.onMouseDown(pos);
@@ -245,7 +246,9 @@ class Whiteboard {
 
   onMouseMove(e) {
     if (!this.isDrawing) return;
-    const pos = this.getMousePos(e);
+    let pos = this.getMousePos(e);
+    pos.pressure = (e.pressure !== undefined) ? e.pressure : 0.5;
+
     if (this.currentTool === 'pen') {
       let penTool = this.penTools[this.currentPenType];
       penTool.onMouseMove(pos);
@@ -260,7 +263,9 @@ class Whiteboard {
   onMouseUp(e) {
     if (!this.isDrawing) return;
     this.isDrawing = false;
-    const pos = this.getMousePos(e);
+    let pos = this.getMousePos(e);
+    pos.pressure = (e.pressure !== undefined) ? e.pressure : 0.5;
+
     if (this.currentTool === 'pen') {
       let penTool = this.penTools[this.currentPenType];
       penTool.onMouseUp(pos);
