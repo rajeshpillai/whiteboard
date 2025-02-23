@@ -20,35 +20,37 @@ class StrokeElement extends DrawingElement {
     ctx.save();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = this.lineWidth;
-    
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(this.points[0].x, this.points[0].y);
+
     if (this.penType === "brush") {
-        // Use Bezier curves for smoothening the brush strokes
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(this.points[0].x, this.points[0].y);
-        
+        // Catmull-Rom spline interpolation for smooth brush strokes
         for (let i = 1; i < this.points.length - 2; i++) {
-            let xc = (this.points[i].x + this.points[i + 1].x) / 2;
-            let yc = (this.points[i].y + this.points[i + 1].y) / 2;
-            ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+            let p0 = this.points[i - 1] || this.points[i];
+            let p1 = this.points[i];
+            let p2 = this.points[i + 1];
+            let p3 = this.points[i + 2] || p2;
+
+            let xc1 = (p0.x + p1.x) / 2;
+            let yc1 = (p0.y + p1.y) / 2;
+            let xc2 = (p1.x + p2.x) / 2;
+            let yc2 = (p1.y + p2.y) / 2;
+
+            ctx.quadraticCurveTo(p1.x, p1.y, xc2, yc2);
         }
-        
-        // Draw the last segment
-        ctx.lineTo(this.points[this.points.length - 1].x, this.points[this.points.length - 1].y);
-        ctx.stroke();
     } else {
-        // Default behavior for other pens (round, flat)
-        ctx.lineCap = this.penType === "round" ? 'round' : 'butt';
-        ctx.lineJoin = this.penType === "round" ? 'round' : 'miter';
-        ctx.beginPath();
-        ctx.moveTo(this.points[0].x, this.points[0].y);
+        // Default straight-line connection for other pen types
         for (let i = 1; i < this.points.length; i++) {
             ctx.lineTo(this.points[i].x, this.points[i].y);
         }
-        ctx.stroke();
     }
 
+    // Draw last segment
+    ctx.lineTo(this.points[this.points.length - 1].x, this.points[this.points.length - 1].y);
+    ctx.stroke();
     ctx.restore();
   }
 
