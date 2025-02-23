@@ -248,6 +248,10 @@ class Whiteboard {
 
     this.pressureEnabled = false; // Default: ON
 
+    // ✅ Undo/Redo stacks
+    this.undoStack = [];
+    this.redoStack = [];
+
 
     // Set a large fixed canvas size in CSS; do not change it on window resize.
     // (The CSS sets #whiteboard { width: 3000px; height: 3000px; } )
@@ -270,7 +274,106 @@ class Whiteboard {
     this.redraw();
   }
 
-  
+  /**
+   * ✅ Saves the current state before making a change (for undo/redo)
+   */
+  saveState() {
+    if (this.undoStack.length > 0 && this.elements.length === 0) return;
+
+    this.undoStack.push(JSON.stringify(this.elements.map(el => {
+        if (el instanceof StrokeElement) return { type: "stroke", ...el };
+        if (el instanceof RectElement) return { type: "rect", ...el };
+        if (el instanceof CircleElement) return { type: "circle", ...el };
+        return null;
+    }).filter(el => el !== null)));
+
+    this.redoStack = []; // ✅ Clear redo stack only if a new action happens after an undo
+  }
+
+
+  undo() {
+    if (this.undoStack.length === 0) return;
+
+    console.log("UNDO STACK BEFORE:", this.undoStack.length);
+
+    // ✅ Save current state before undoing (with proper `type` field)
+    this.redoStack.push(JSON.stringify(this.elements.map(el => {
+        if (el instanceof StrokeElement) return { type: "stroke", ...el };
+        if (el instanceof RectElement) return { type: "rect", ...el };
+        if (el instanceof CircleElement) return { type: "circle", ...el };
+        return null;
+    }).filter(el => el !== null))); // Remove invalid elements
+
+    // ✅ Restore last state
+    let restoredState = JSON.parse(this.undoStack.pop());
+
+    console.log("Undo Restored State:", restoredState);
+
+    this.elements = restoredState.length > 0 ? this.restoreElements(restoredState) : [];
+
+    console.log("AFTER UNDO, ELEMENTS:", this.elements);
+
+    this.redraw();
+  }
+
+
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+
+    console.log("REDO STACK BEFORE:", this.redoStack.length);
+
+    // ✅ Save current state before applying redo (so it can be undone again)
+    this.undoStack.push(JSON.stringify(this.elements.map(el => {
+        if (el instanceof StrokeElement) return { type: "stroke", ...el };
+        if (el instanceof RectElement) return { type: "rect", ...el };
+        if (el instanceof CircleElement) return { type: "circle", ...el };
+        return null;
+    }).filter(el => el !== null)));
+
+    // ✅ Restore last undone state
+    let restoredState = JSON.parse(this.redoStack.pop());
+
+    console.log("Restored Redo State:", restoredState);
+
+    // ✅ Ensure all elements have a `type`
+    restoredState.forEach(el => {
+        if (!el.type) {
+            console.error("🚨 Restore Error: Missing `type` in redo state!", el);
+        }
+    });
+
+    this.elements = restoredState.length > 0 ? this.restoreElements(restoredState) : [];
+
+    console.log("AFTER REDO, ELEMENTS:", this.elements);
+
+    this.redraw();  
+  }
+
+
+  /**
+   * ✅ Converts JSON data back into proper class instances
+   */
+  restoreElements(parsedData) {
+    return parsedData.map(item => {
+        if (!item.type) {
+            console.error("🚨 Restore Error: Missing `type` in redo state!", item);
+            return null; // Skip invalid entries
+        }
+
+        if (item.type === "stroke") {
+            return new StrokeElement(item.points, item.color, item.lineWidth, item.penType, item.smoothingEnabled, item.smoothingFactor);
+        } else if (item.type === "rect") {
+            return new RectElement(item.x, item.y, item.w, item.h, item.color);
+        } else if (item.type === "circle") {
+            return new CircleElement(item.x, item.y, item.radius, item.color);
+        }
+
+        return null;
+    }).filter(el => el !== null); // ✅ Remove null values
+  }
+
+
   
   // Redraw all elements.
   redraw() {
@@ -307,6 +410,23 @@ class Whiteboard {
     });
   }
 
+   /**
+   * ✅ Handles undo/redo keyboard shortcuts
+   */
+   bindUndoRedoKeys() {
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z") { // CTRL+Z (Undo)
+          e.preventDefault();
+          this.undo();
+        } else if (e.key === "y") { // CTRL+Y (Redo)
+          e.preventDefault();
+          this.redo();
+        }
+      }
+    });
+  }
+
   // Returns a simple bounding box for an element.
   getBoundingBox(el) {
     if (el instanceof StrokeElement) {
@@ -337,9 +457,11 @@ class Whiteboard {
   // Delete the currently selected element.
   deleteSelected() {
     if (this.selectedElements.length > 0) {
+        this.saveState();
         this.elements = this.elements.filter(el => !this.selectedElements.includes(el));
         this.selectedElements = [];
     } else if (this.selectedElement) {
+        this.saveState();
         this.elements = this.elements.filter(el => el !== this.selectedElement);
         this.selectedElement = null;
     } else {
@@ -474,6 +596,12 @@ class Whiteboard {
       }
     });
     
+    this.bindUndoRedoKeys(); // Enable keyboard shortcuts
+
+    document.getElementById("undo").addEventListener("click", () => this.undo());
+    document.getElementById("redo").addEventListener("click", () => this.redo());
+
+
     // Bind the Delete button.
     document.getElementById('delete').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -619,9 +747,6 @@ class Whiteboard {
                 break;
               }
             }
-
-            // console.log(this.selectedElement, this.isDraggingSelected);
-
         }
     } else if (this.currentTool === "pen" || this.currentTool === "eraser") {
         let col = this.currentTool === "eraser" ? "#fff" : this.currentColor;
@@ -647,10 +772,6 @@ class Whiteboard {
             this.needsRedraw = false;
         });
     }
-
-    console.log("Smoothing: ", this.smoothingEnabled);
-    console.log("# of Elems: ", this.elements.length);
-    console.log("# of points in current elem: ", this.currentElement?.points);
 
     if (this.currentTool === "pen" && this.currentPenType === "brush") {
       if (!this.currentElement) return;
@@ -714,7 +835,7 @@ class Whiteboard {
     } else if (this.currentElement) {
         if (this.currentTool === "pen" || this.currentTool === "eraser" ||
             this.currentTool === "rect" || this.currentTool === "circle") {
-            this.elements.push(this.currentElement);
+            this.addElement(this.currentElement); // ✅ Use `addElement()` to track changes
         }
 
         // ✅ Ensure brush strokes are also saved
@@ -732,6 +853,11 @@ class Whiteboard {
     this.redraw();
   }
 
+  addElement(element) {
+    this.saveState(); // ✅ Save the current state before making a change
+    this.elements.push(element); // ✅ Add new element to the whiteboard
+    this.redraw(); // ✅ Refresh the canvas to show the update
+  }
 
   isInsideSelection(el, rect) {
     let bb = this.getBoundingBox(el);
@@ -743,8 +869,6 @@ class Whiteboard {
     );
   }
 }
-
-
 
 document.addEventListener('DOMContentLoaded', () => {
   new Whiteboard('whiteboard');
