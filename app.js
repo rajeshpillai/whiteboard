@@ -17,8 +17,135 @@ class DrawingElement {
 
 }
 
-// A freehand stroke element.
 class StrokeElement extends DrawingElement {
+  constructor(points, color, lineWidth, penType, smoothingEnabled = false) {
+    super();
+    this.points = points || [];
+    this.smoothedPoints = [];
+    this.color = color;
+    this.lineWidth = lineWidth;
+    this.penType = penType || "round";
+    this.opacityCache = {}; 
+    this.smoothingEnabled = smoothingEnabled; // ✅ Toggle smoothing
+    this.smoothingFactor = 0.6; // ✅ Adjust this for smoothness level
+  }
+
+  draw(ctx) {
+    if (this.points.length < 2) return;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+
+    // ✅ Apply smoothing only for brush if enabled
+    let interpolatedPoints = (this.penType === "brush" && this.smoothingEnabled)
+        ? this.getSmoothStroke() 
+        : this.points;
+
+    ctx.moveTo(interpolatedPoints[0].x, interpolatedPoints[0].y);
+
+    for (let i = 1; i < interpolatedPoints.length - 1; i++) {
+      let p0 = interpolatedPoints[i - 1];
+      let p1 = interpolatedPoints[i];
+      let p2 = interpolatedPoints[i + 1];
+
+      let xc2 = (p1.x + p2.x) / 2;
+      let yc2 = (p1.y + p2.y) / 2;
+
+      if (this.penType === "brush") {
+        let width = this.lineWidth * (p1.pressure || 1);
+        let opacity = Math.min(1, 0.3 + (p1.pressure || 1) * 0.7);
+
+        let cacheKey = `${this.color}-${width}-${opacity}`;
+        if (!this.opacityCache[cacheKey]) {
+          this.opacityCache[cacheKey] = `rgba(${this.hexToRgb(this.color)}, ${opacity})`;
+        }
+
+        ctx.lineWidth = Math.max(1, width);
+        ctx.strokeStyle = this.opacityCache[cacheKey];
+      } else {
+        ctx.lineWidth = this.lineWidth;
+        ctx.strokeStyle = this.color;
+      }
+
+      // ✅ Apply Bézier curves only when smoothing is enabled
+      ctx.quadraticCurveTo(p1.x, p1.y, xc2, yc2);
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * ✅ Uses Catmull-Rom spline-like smoothing based on cubic Bézier interpolation.
+   * ✅ Only applies smoothing if `this.smoothingEnabled` is true.
+   */
+  getSmoothStroke() {
+    if (!this.smoothingEnabled || this.points.length < 3) return this.points;
+
+    let smoothed = [];
+    smoothed.push(this.points[0]);
+
+    for (let i = 1; i < this.points.length - 1; i++) {
+      let prev = this.points[i - 1];
+      let curr = this.points[i];
+      let next = this.points[i + 1];
+
+      let xc1 = (prev.x + curr.x) / 2;
+      let yc1 = (prev.y + curr.y) / 2;
+      let xc2 = (curr.x + next.x) / 2;
+      let yc2 = (curr.y + next.y) / 2;
+
+      let smoothX = curr.x * this.smoothingFactor + xc2 * (1 - this.smoothingFactor);
+      let smoothY = curr.y * this.smoothingFactor + yc2 * (1 - this.smoothingFactor);
+
+      smoothed.push({ x: smoothX, y: smoothY, pressure: curr.pressure });
+    }
+
+    smoothed.push(this.points[this.points.length - 1]);
+    return smoothed;
+  }
+
+  /**
+   * ✅ Reduces the number of stored points to keep performance high.
+   */
+  simplify() {
+    if (this.points.length > 500) {
+      this.points = this.points.filter((_, i) => i % 2 === 0);
+    }
+  }
+
+  /**
+   * ✅ Adds points intelligently with adaptive smoothing.
+   */
+  addPoint(pos) {
+    if (this.points.length > 0) {
+      const prevPoint = this.points[this.points.length - 1];
+      let dx = pos.x - prevPoint.x;
+      let dy = pos.y - prevPoint.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 2) return; // ✅ Avoid jittery small movements
+    }
+
+    this.points.push(pos);
+  }
+
+  /**
+   * ✅ Updates color dynamically while drawing.
+   */
+  updateColor(newColor) {
+    this.color = newColor;
+    this.opacityCache = {}; 
+  }
+}
+
+
+
+
+// A freehand stroke element.
+class StrokeElement2XXX extends DrawingElement {
   constructor(points, color, lineWidth, penType) {
     super();
     this.points = points || [];
@@ -621,17 +748,6 @@ class Whiteboard {
 
     if (this.currentTool === "pen" && this.currentPenType === "brush") {
       if (!this.currentElement) return;
-
-      const prevPoint = this.currentElement.points[this.currentElement.points.length - 1];
-
-      if (prevPoint) {
-          let dx = pos.x - prevPoint.x;
-          let dy = pos.y - prevPoint.y;
-          let distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < 2) return; // ✅ Only add points if movement is significant
-      }
-
       pos.pressure = e.pressure !== undefined && this.pressureEnabled ? e.pressure : 1;
       this.currentElement.addPoint(pos, this.currentColor);
     }
