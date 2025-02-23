@@ -48,7 +48,7 @@
       
       drawings.forEach(drawing => {
         let img = document.createElement('img');
-        img.src = drawing.data;
+        img.src = drawing.preview;
         // Wrap image in a link to open the whiteboard with this drawing loaded
         let link = document.createElement('a');
         link.href = 'index.html?id=' + drawing.id;

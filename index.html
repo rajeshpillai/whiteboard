@@ -16,40 +16,47 @@
     <input type="color" id="colorPicker" value="#000000" title="Custom Color">
   </div>
 
+  <!-- Sidebar with tools -->
   <div id="sidebar">
     <h2>Tools</h2>
-    <div class="pen-container">
-      <button id="tool-pen" class="tool-btn active" data-tool="pen">Pen</button>
+    <!-- Drawing tools -->
+    <button id="tool-pen" class="tool-btn" data-tool="pen">Round Pen</button>
+    <button id="tool-flat-pen" class="tool-btn" data-tool="pen">Flat Pen</button>
+    <button id="tool-brush-pen" class="tool-btn" data-tool="pen">Brush Pen</button>
+    <button id="tool-rect" class="tool-btn" data-tool="rect">Rectangle</button>
+    <button id="tool-circle" class="tool-btn" data-tool="circle">Circle</button>
+    <button id="tool-eraser" class="tool-btn" data-tool="eraser">Eraser</button>
+    <hr>
+    <!-- New Select mode -->
+    <button id="tool-select" class="tool-btn" data-tool="select">Select</button>
+    <hr>
+    <!-- New Drawing button -->
+    <button id="newDrawing" class="tool-btn">New Drawing</button>
+    <hr>
+    <!-- Pen and eraser settings -->
+    <div id="pen-settings">
       <span id="penLineWidthIcon" class="tool-icon" title="Set Pen Size">⚙️</span>
       <div id="penLineWidthSelector">
-        <label for="penWidth">Size:</label>
+        <label for="penWidth">Pen Size:</label>
         <input type="range" id="penWidth" min="1" max="20" value="2">
       </div>
     </div>
-    <div class="pen-type-container">
-      <button id="tool-flat-pen" class="tool-btn">Flat Pen</button>
-    </div>
-    <!-- Button for Brush Pen -->
-    <div class="pen-type-container">
-      <button id="tool-brush-pen" class="tool-btn">Brush Pen</button>
-    </div>
-    
-    <button id="tool-rect" class="tool-btn" data-tool="rect">Rectangle</button>
-    <button id="tool-circle" class="tool-btn" data-tool="circle">Circle</button>
-    <!-- Eraser container with icon for line width selection -->
-    <div class="eraser-container">
-      <button id="tool-eraser" class="tool-btn" data-tool="eraser">Eraser</button>
+    <div id="eraser-settings">
       <span id="lineWidthIcon" class="tool-icon" title="Set Eraser Width">⚙️</span>
       <div id="lineWidthSelector">
-        <label for="eraserWidth">Width:</label>
+        <label for="eraserWidth">Eraser Size:</label>
         <input type="range" id="eraserWidth" min="2" max="50" value="10">
       </div>
-    </div>  
+    </div>
     <hr>
-    <button id="save">Save</button>
+    <button id="save" class="tool-btn">Save</button>
+    <br>
+    <!-- Optionally include a Load button if needed -->
+    <!-- <button id="load" class="tool-btn">Load</button> -->
     <br>
     <a href="gallery.html" id="gallery-link">Gallery</a>
   </div>
+
   <canvas id="whiteboard"></canvas>
   <script src="app.js"></script>
 </body>
