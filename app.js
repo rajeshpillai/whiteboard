@@ -295,6 +295,10 @@ class Whiteboard {
       this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
+
+    // Modify click event on the canvas
+    this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+
     
     // Bind only tool buttons that have a data-tool attribute.
     const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
@@ -380,6 +384,34 @@ class Whiteboard {
     // Bind Pan tool events (Pan tool button should have data-tool="pan").
     // (The generic tool buttons binding above will set this.currentTool to "pan" when clicked.)
   }
+
+  // Reset
+  handleCanvasClick(e) {
+    let pos = this.getMousePos(e);
+
+    console.log(`Canvas click:  
+                  tool: ${this.currentTool}, 
+                  isSelecting: ${this.isSelecting}, 
+                  selectionRect: ${this.selectionRect}, 
+                  isDraggingMultiple: ${this.isDraggingMultiple},
+                  selectedElements: ${this.selectedElements.length}`
+                );
+
+    if (this.selectedElements.length > 0) {  // Check if anything is selected
+        let clickedInside = this.selectedElements.some(el => el.containsPoint(pos.x, pos.y));
+        console.log(`clickedInside: ${clickedInside}`);
+        if (clickedInside) {
+            this.isDraggingMultiple = false; // Start dragging
+            this.lastMousePos = pos;
+        } else {
+            console.log("setting selectedElements to empty!!!");
+            if (this.currentTool == "select") {
+              this.selectedElements = []; // Clear selection
+            }
+            this.redraw();
+        }
+    }
+}
   
   // Pointer event wrappers.
   onPointerDown(e) {
@@ -408,7 +440,7 @@ class Whiteboard {
   
   onMouseDown(e) {
     let pos = this.getMousePos(e);
-
+    console.log(`currentTool: ${this.currentTool}`);
     if (this.currentTool === "select-rect") {
         // Start drawing the selection rectangle
         this.isSelecting = true;
@@ -416,14 +448,28 @@ class Whiteboard {
     } else if (this.currentTool === "select") {
         // Check if clicking inside selected elements
         let clickedInside = this.selectedElements.some(el => el.containsPoint(pos.x, pos.y));
-
+        console.log(`clickedInside: ${clickedInside}`);
         if (clickedInside) {
             this.isDraggingMultiple = true;
             this.lastMousePos = pos;
         } else {
             // If clicked outside, clear selection
-            this.selectedElements = [];
-            this.redraw();
+            // this.selectedElements = [];
+            // this.redraw();
+
+            // TODO:
+            console.log("Single selection check...");
+            for (let i = this.elements.length - 1; i >= 0; i--) {
+              if (this.elements[i].containsPoint(pos.x, pos.y)) {
+                this.selectedElement = this.elements[i];
+                this.lastMousePos = pos;
+                this.isDraggingSelected = true;
+                break;
+              }
+            }
+
+            console.log(this.selectedElement, this.isDraggingSelected);
+
         }
     } else if (this.currentTool === "pen" || this.currentTool === "eraser") {
         let col = this.currentTool === "eraser" ? "#fff" : this.currentColor;
@@ -442,7 +488,16 @@ class Whiteboard {
   onMouseMove(e) {
     let pos = this.getMousePos(e);
 
-    if (this.isSelecting && this.selectionRect) {
+    console.log(`tool: ${this.currentTool}, isSelecting: ${this.isSelecting}, selectionRect: ${this.selectionRect}, isDraggingMultiple: ${this.isDraggingMultiple}`);
+
+    // TODO: 
+    if (this.currentTool === "select" && this.selectedElement && this.isDraggingSelected) {
+      let dx = pos.x - this.lastMousePos.x;
+      let dy = pos.y - this.lastMousePos.y;
+      this.selectedElement.move(dx, dy);
+      this.lastMousePos = pos;
+      this.redraw();
+    } else if (this.isSelecting && this.selectionRect) {
         // Update the selection rectangle size
         this.selectionRect.w = pos.x - this.selectionRect.x;
         this.selectionRect.h = pos.y - this.selectionRect.y;
@@ -468,10 +523,15 @@ class Whiteboard {
   }
   
   onMouseUp(e) {
-    if (this.isSelecting) {
+    // TODO; 
+    if (this.currentTool === "select") {
+      this.isDraggingSelected = false;
+      this.isDraggingMultiple = false;
+    } else if (this.isSelecting) {
         // Find elements inside the selection rectangle
         this.selectedElements = this.elements.filter(el => this.isInsideSelection(el, this.selectionRect));
         this.isSelecting = false;
+        this.isDraggingMultiple = false;
     } else if (this.isDraggingMultiple) {
         this.isDraggingMultiple = false;
     } else if (this.currentElement) {
