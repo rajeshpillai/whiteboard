@@ -27,32 +27,56 @@ class StrokeElement extends DrawingElement {
     ctx.moveTo(this.points[0].x, this.points[0].y);
 
     if (this.penType === "brush") {
-        // Catmull-Rom spline interpolation for smooth brush strokes
-        for (let i = 1; i < this.points.length - 2; i++) {
-            let p0 = this.points[i - 1] || this.points[i];
-            let p1 = this.points[i];
-            let p2 = this.points[i + 1];
-            let p3 = this.points[i + 2] || p2;
+        let smoothFactor = this.brushSmoothness; // User-controlled smoothness
 
-            let xc1 = (p0.x + p1.x) / 2;
-            let yc1 = (p0.y + p1.y) / 2;
-            let xc2 = (p1.x + p2.x) / 2;
-            let yc2 = (p1.y + p2.y) / 2;
+        // Ensure at least 4 points for Catmull-Rom Spline
+        if (this.points.length > 3) {
+            for (let i = 0; i < this.points.length - 1; i++) {
+                let p0 = i === 0 ? this.points[i] : this.points[i - 1];
+                let p1 = this.points[i];
+                let p2 = this.points[i + 1];
+                let p3 = i + 2 < this.points.length ? this.points[i + 2] : p2;
 
-            ctx.quadraticCurveTo(p1.x, p1.y, xc2, yc2);
+                // Generate interpolated points using Catmull-Rom equation
+                for (let t = 0; t < 1; t += smoothFactor * 0.1) {
+                    let tt = t * t;
+                    let ttt = tt * t;
+
+                    let x =
+                        0.5 *
+                        (2 * p1.x +
+                            (-p0.x + p2.x) * t +
+                            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt +
+                            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt);
+
+                    let y =
+                        0.5 *
+                        (2 * p1.y +
+                            (-p0.y + p2.y) * t +
+                            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt +
+                            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt);
+
+                    ctx.lineTo(x, y);
+                }
+            }
+        } else {
+            // If not enough points, fall back to default straight-line drawing
+            for (let i = 1; i < this.points.length; i++) {
+                ctx.lineTo(this.points[i].x, this.points[i].y);
+            }
         }
     } else {
-        // Default straight-line connection for other pen types
+        // Default straight-line drawing for other pen types
         for (let i = 1; i < this.points.length; i++) {
             ctx.lineTo(this.points[i].x, this.points[i].y);
         }
     }
 
-    // Draw last segment
-    ctx.lineTo(this.points[this.points.length - 1].x, this.points[this.points.length - 1].y);
     ctx.stroke();
     ctx.restore();
   }
+
+
 
   
   containsPoint(x, y) {
@@ -165,6 +189,9 @@ class Whiteboard {
     // For pen, currentPenType can be "round", "flat", or "brush"
     this.currentTool = "pen";
     this.currentPenType = "round"; // default
+
+    this.brushSmoothness = 0.5; // Default smoothness
+
 
     // Set a large fixed canvas size in CSS; do not change it on window resize.
     // (The CSS sets #whiteboard { width: 3000px; height: 3000px; } )
@@ -316,6 +343,12 @@ class Whiteboard {
       this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
+
+    document.getElementById('smoothness').addEventListener('input', (e) => {
+      this.brushSmoothness = parseFloat(e.target.value);
+      document.getElementById('smoothnessValue').textContent = this.brushSmoothness;
+    });
+  
 
     // Modify click event on the canvas
     this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
@@ -586,6 +619,8 @@ class Whiteboard {
     );
   }
 }
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
   new Whiteboard('whiteboard');
