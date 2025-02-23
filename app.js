@@ -19,41 +19,45 @@ class StrokeElement extends DrawingElement {
     if (this.points.length < 2) return;
     ctx.save();
     ctx.strokeStyle = this.color;
-    ctx.lineWidth = this.lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    
+    ctx.lineCap = this.penType === "round" ? "round" : "butt";
+    ctx.lineJoin = this.penType === "rount" ? "round" : "miter";
 
     ctx.beginPath();
     ctx.moveTo(this.points[0].x, this.points[0].y);
 
-    // Use Cubic Bezier
     if (this.penType === "brush" && this.points.length > 3) {
         for (let i = 1; i < this.points.length - 2; i++) {
             let p0 = this.points[i - 1];
             let p1 = this.points[i];
             let p2 = this.points[i + 1];
-            let p3 = this.points[i + 2];
+
+            let width = this.lineWidth;
+            if (this.pressureEnabled) {
+                width *= p1.pressure || 1; // Scale line width based on pressure
+            }
+
+            ctx.lineWidth = Math.max(1, width); // Ensure minimum width
 
             let xc1 = (p0.x + p1.x) / 2;
             let yc1 = (p0.y + p1.y) / 2;
             let xc2 = (p1.x + p2.x) / 2;
             let yc2 = (p1.y + p2.y) / 2;
-            let xc3 = (p2.x + p3.x) / 2;
-            let yc3 = (p2.y + p3.y) / 2;
 
-            ctx.bezierCurveTo(xc1, yc1, xc2, yc2, xc3, yc3);
+            ctx.quadraticCurveTo(p1.x, p1.y, xc2, yc2);
         }
     } else {
-        // Default straight-line drawing for other pen types
-        for (let i = 1; i < this.points.length; i++) {
-            ctx.lineTo(this.points[i].x, this.points[i].y);
-        }
-    }
+      // Default straight-line drawing for other pen types
+      ctx.lineWidth = this.lineWidth;
+      for (let i = 1; i < this.points.length; i++) {
+          ctx.lineTo(this.points[i].x, this.points[i].y);
+      }
+  }
 
     ctx.stroke();
     ctx.restore();
   }
-  
+
   containsPoint(x, y) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     this.points.forEach(pt => {
@@ -167,6 +171,9 @@ class Whiteboard {
 
     this.brushSmoothness = 0.5; // Default smoothness
     this.smoothingEnabled = true;
+
+    this.pressureEnabled = false; // Default: ON
+
 
     // Set a large fixed canvas size in CSS; do not change it on window resize.
     // (The CSS sets #whiteboard { width: 3000px; height: 3000px; } )
@@ -529,19 +536,19 @@ class Whiteboard {
       const now = Date.now();
       const prevPoint = this.currentElement.points[this.currentElement.points.length - 1];
 
-      if (prevPoint && this.smoothingEnabled) { // Only smooth if enabled
+      if (prevPoint && this.smoothingEnabled) {
           let dx = pos.x - prevPoint.x;
           let dy = pos.y - prevPoint.y;
           let dist = Math.sqrt(dx * dx + dy * dy);
           let dt = now - prevPoint.time;
           let speed = dist / (dt || 1); // Avoid division by zero
 
-          // Use brushSmoothness as a weight factor for the moving average
-          const alpha = this.brushSmoothness; // Higher = more smoothing
+          // Weighted moving average (reduce jitter)
+          const alpha = this.brushSmoothness;
           pos.x = alpha * prevPoint.x + (1 - alpha) * pos.x;
           pos.y = alpha * prevPoint.y + (1 - alpha) * pos.y;
 
-          // Speed-based smoothing (slow strokes = more smoothing, fast strokes = less)
+          // Speed-based smoothing
           const minSmooth = 0.2 * this.brushSmoothness;
           const maxSmooth = 0.9 * this.brushSmoothness;
           const speedFactor = Math.max(minSmooth, Math.min(maxSmooth, 1 - speed * 0.01));
@@ -550,9 +557,10 @@ class Whiteboard {
           pos.y = prevPoint.y * speedFactor + pos.y * (1 - speedFactor);
       }
 
-      pos.time = now; // Store timestamp for next calculation
+      pos.time = now;
+      pos.pressure = e.pressure !== undefined && this.pressureEnabled ? e.pressure : 1; // Apply pressure only if enabled
       this.currentElement.points.push(pos);
-    }
+   }
 
 
     if (this.currentTool === "eraser") {
