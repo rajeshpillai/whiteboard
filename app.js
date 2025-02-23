@@ -490,7 +490,17 @@ class Whiteboard {
 
     console.log(`tool: ${this.currentTool}, isSelecting: ${this.isSelecting}, selectionRect: ${this.selectionRect}, isDraggingMultiple: ${this.isDraggingMultiple}`);
 
-    // TODO: 
+    if (this.currentTool === "eraser") {
+      this.elements = this.elements.map(el => {
+          if (el instanceof StrokeElement) {
+              el.points = el.points.filter(pt => 
+                  Math.sqrt((pt.x - pos.x) ** 2 + (pt.y - pos.y) ** 2) > this.eraserLineWidth
+              );
+              return el;
+          }
+          return el;
+      }).filter(el => el.points.length > 1);  // Remove strokes with no points
+    }
     if (this.currentTool === "select" && this.selectedElement && this.isDraggingSelected) {
       let dx = pos.x - this.lastMousePos.x;
       let dy = pos.y - this.lastMousePos.y;
