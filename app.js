@@ -411,7 +411,7 @@ class Whiteboard {
             this.redraw();
         }
     }
-}
+  } 
   
   // Pointer event wrappers.
   onPointerDown(e) {
