@@ -14,26 +14,45 @@ class StrokeElement extends DrawingElement {
     this.lineWidth = lineWidth;
     this.penType = penType; // "round", "flat", or "brush"
   }
+
   draw(ctx) {
     if (this.points.length < 2) return;
     ctx.save();
     ctx.strokeStyle = this.color;
     ctx.lineWidth = this.lineWidth;
-    ctx.beginPath();
-    ctx.moveTo(this.points[0].x, this.points[0].y);
-    for (let i = 1; i < this.points.length; i++) {
-      ctx.lineTo(this.points[i].x, this.points[i].y);
+    
+    if (this.penType === "brush") {
+        // Use Bezier curves for smoothening the brush strokes
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        
+        for (let i = 1; i < this.points.length - 2; i++) {
+            let xc = (this.points[i].x + this.points[i + 1].x) / 2;
+            let yc = (this.points[i].y + this.points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(this.points[i].x, this.points[i].y, xc, yc);
+        }
+        
+        // Draw the last segment
+        ctx.lineTo(this.points[this.points.length - 1].x, this.points[this.points.length - 1].y);
+        ctx.stroke();
+    } else {
+        // Default behavior for other pens (round, flat)
+        ctx.lineCap = this.penType === "round" ? 'round' : 'butt';
+        ctx.lineJoin = this.penType === "round" ? 'round' : 'miter';
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+            ctx.lineTo(this.points[i].x, this.points[i].y);
+        }
+        ctx.stroke();
     }
-    if (this.penType === "round") {
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-    } else if (this.penType === "flat") {
-      ctx.lineCap = 'butt';
-      ctx.lineJoin = 'miter';
-    }
-    ctx.stroke();
+
     ctx.restore();
   }
+
+  
   containsPoint(x, y) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     this.points.forEach(pt => {
