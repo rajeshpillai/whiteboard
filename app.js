@@ -26,44 +26,22 @@ class StrokeElement extends DrawingElement {
     ctx.beginPath();
     ctx.moveTo(this.points[0].x, this.points[0].y);
 
-    if (this.penType === "brush") {
-        let smoothFactor = this.brushSmoothness; // User-controlled smoothness
+    // Use Cubic Bezier
+    if (this.penType === "brush" && this.points.length > 3) {
+        for (let i = 1; i < this.points.length - 2; i++) {
+            let p0 = this.points[i - 1];
+            let p1 = this.points[i];
+            let p2 = this.points[i + 1];
+            let p3 = this.points[i + 2];
 
-        // Ensure at least 4 points for Catmull-Rom Spline
-        if (this.points.length > 3) {
-            for (let i = 0; i < this.points.length - 1; i++) {
-                let p0 = i === 0 ? this.points[i] : this.points[i - 1];
-                let p1 = this.points[i];
-                let p2 = this.points[i + 1];
-                let p3 = i + 2 < this.points.length ? this.points[i + 2] : p2;
+            let xc1 = (p0.x + p1.x) / 2;
+            let yc1 = (p0.y + p1.y) / 2;
+            let xc2 = (p1.x + p2.x) / 2;
+            let yc2 = (p1.y + p2.y) / 2;
+            let xc3 = (p2.x + p3.x) / 2;
+            let yc3 = (p2.y + p3.y) / 2;
 
-                // Generate interpolated points using Catmull-Rom equation
-                for (let t = 0; t < 1; t += smoothFactor * 0.1) {
-                    let tt = t * t;
-                    let ttt = tt * t;
-
-                    let x =
-                        0.5 *
-                        (2 * p1.x +
-                            (-p0.x + p2.x) * t +
-                            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt +
-                            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt);
-
-                    let y =
-                        0.5 *
-                        (2 * p1.y +
-                            (-p0.y + p2.y) * t +
-                            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt +
-                            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt);
-
-                    ctx.lineTo(x, y);
-                }
-            }
-        } else {
-            // If not enough points, fall back to default straight-line drawing
-            for (let i = 1; i < this.points.length; i++) {
-                ctx.lineTo(this.points[i].x, this.points[i].y);
-            }
+            ctx.bezierCurveTo(xc1, yc1, xc2, yc2, xc3, yc3);
         }
     } else {
         // Default straight-line drawing for other pen types
@@ -75,9 +53,6 @@ class StrokeElement extends DrawingElement {
     ctx.stroke();
     ctx.restore();
   }
-
-
-
   
   containsPoint(x, y) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -191,7 +166,7 @@ class Whiteboard {
     this.currentPenType = "round"; // default
 
     this.brushSmoothness = 0.5; // Default smoothness
-
+    this.smoothingEnabled = true;
 
     // Set a large fixed canvas size in CSS; do not change it on window resize.
     // (The CSS sets #whiteboard { width: 3000px; height: 3000px; } )
@@ -344,6 +319,10 @@ class Whiteboard {
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
 
+    document.getElementById('smoothToggle').addEventListener('change', (e) => {
+      this.smoothingEnabled = e.target.checked;
+    });
+  
     document.getElementById('smoothness').addEventListener('input', (e) => {
       this.brushSmoothness = parseFloat(e.target.value);
       document.getElementById('smoothnessValue').textContent = this.brushSmoothness;
@@ -543,6 +522,38 @@ class Whiteboard {
     let pos = this.getMousePos(e);
 
     console.log(`tool: ${this.currentTool}, isSelecting: ${this.isSelecting}, selectionRect: ${this.selectionRect}, isDraggingMultiple: ${this.isDraggingMultiple}`);
+
+    if (this.currentTool === "pen" && this.currentPenType === "brush") {
+      if (!this.currentElement) return;
+
+      const now = Date.now();
+      const prevPoint = this.currentElement.points[this.currentElement.points.length - 1];
+
+      if (prevPoint && this.smoothingEnabled) { // Only smooth if enabled
+          let dx = pos.x - prevPoint.x;
+          let dy = pos.y - prevPoint.y;
+          let dist = Math.sqrt(dx * dx + dy * dy);
+          let dt = now - prevPoint.time;
+          let speed = dist / (dt || 1); // Avoid division by zero
+
+          // Use brushSmoothness as a weight factor for the moving average
+          const alpha = this.brushSmoothness; // Higher = more smoothing
+          pos.x = alpha * prevPoint.x + (1 - alpha) * pos.x;
+          pos.y = alpha * prevPoint.y + (1 - alpha) * pos.y;
+
+          // Speed-based smoothing (slow strokes = more smoothing, fast strokes = less)
+          const minSmooth = 0.2 * this.brushSmoothness;
+          const maxSmooth = 0.9 * this.brushSmoothness;
+          const speedFactor = Math.max(minSmooth, Math.min(maxSmooth, 1 - speed * 0.01));
+
+          pos.x = prevPoint.x * speedFactor + pos.x * (1 - speedFactor);
+          pos.y = prevPoint.y * speedFactor + pos.y * (1 - speedFactor);
+      }
+
+      pos.time = now; // Store timestamp for next calculation
+      this.currentElement.points.push(pos);
+    }
+
 
     if (this.currentTool === "eraser") {
       this.elements = this.elements.map(el => {
