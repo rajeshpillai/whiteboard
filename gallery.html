@@ -11,15 +11,31 @@
       display: flex;
       flex-wrap: wrap;
     }
-    #gallery img {
+    .drawing-container {
+      text-align: center;
+      margin: 10px;
+    }
+    .drawing-container img {
       width: 200px;
       margin: 10px;
       border: 1px solid #ccc;
       cursor: pointer;
       transition: transform 0.2s;
     }
-    #gallery img:hover {
+    .drawing-container img:hover {
       transform: scale(1.05);
+    }
+    .delete-btn {
+      display: block;
+      margin: 5px auto;
+      padding: 5px 10px;
+      background-color: #ff4d4d;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .delete-btn:hover {
+      background-color: #e60000;
     }
     h1 {
       text-align: center;
@@ -47,13 +63,39 @@
       }
       
       drawings.forEach(drawing => {
+        // Create image element with preview.
         let img = document.createElement('img');
-        img.src = drawing.preview;
-        // Wrap image in a link to open the whiteboard with this drawing loaded
+        img.src = drawing.preview; // Use the preview property.
+        img.alt = "Drawing Preview";
+        
+        // Wrap image in a link to open the drawing board with this drawing loaded.
         let link = document.createElement('a');
         link.href = 'index.html?id=' + drawing.id;
         link.appendChild(img);
-        galleryDiv.appendChild(link);
+        
+        // Create a Delete button.
+        let delBtn = document.createElement('button');
+        delBtn.textContent = "Delete";
+        delBtn.className = "delete-btn";
+        delBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (confirm("Are you sure you want to delete this drawing?")) {
+            // Remove this drawing from the drawings array.
+            drawings = drawings.filter(d => d.id != drawing.id);
+            localStorage.setItem('drawings', JSON.stringify(drawings));
+            // Remove the container from the gallery.
+            container.remove();
+          }
+        });
+        
+        // Create a container for the preview and delete button.
+        let container = document.createElement('div');
+        container.className = "drawing-container";
+        container.appendChild(link);
+        container.appendChild(delBtn);
+        
+        galleryDiv.appendChild(container);
       });
     });
   </script>

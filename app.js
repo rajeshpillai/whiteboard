@@ -135,7 +135,7 @@ class Whiteboard {
     this.bindEvents();
     this.redraw();
     
-    // Load a drawing if an id is provided in URL parameters.
+    // If a drawing id is provided in URL parameters, load that drawing.
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -191,6 +191,17 @@ class Whiteboard {
     this.currentElement = null;
     this.selectedElement = null;
     this.redraw();
+  }
+  
+  // Delete the currently selected element.
+  deleteSelected() {
+    if (this.selectedElement) {
+      this.elements = this.elements.filter(el => el !== this.selectedElement);
+      this.selectedElement = null;
+      this.redraw();
+    } else {
+      alert("No element selected for deletion.");
+    }
   }
   
   // Save the current drawing (vector data and preview) to localStorage.
@@ -250,8 +261,8 @@ class Whiteboard {
       this.canvas.addEventListener('mouseout', (e) => this.onMouseUp(e));
     }
     
-    // Tool selection buttons.
-    const toolButtons = document.querySelectorAll('.tool-btn');
+    // Bind only tool buttons that have a data-tool attribute.
+    const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         this.currentTool = btn.dataset.tool;
@@ -267,17 +278,37 @@ class Whiteboard {
         } else if (btn.id === 'tool-brush-pen') {
           this.currentPenType = "brush";
         }
+        // Clear selection when switching tools.
         this.selectedElement = null;
         toolButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.redraw();
       });
     });
+
+    // Bind the Delete button separately.
+    document.getElementById('delete').addEventListener('click', () => {
+      e.stopPropagation();  // Prevent any parent events from firing
+      this.deleteSelected();
+    });
+
     
     // New Drawing button.
     document.getElementById('newDrawing').addEventListener('click', () => {
       if (confirm("Start a new drawing? Your current drawing will be lost.")) {
         this.newDrawing();
+      }
+    });
+    
+    // Delete button.
+    document.getElementById('delete').addEventListener('click', () => {
+      this.deleteSelected();
+    });
+    
+    // Add keyboard listener for Delete key.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === "Delete" && this.selectedElement) {
+        this.deleteSelected();
       }
     });
     
@@ -315,10 +346,8 @@ class Whiteboard {
     
     // Save button.
     document.getElementById('save').addEventListener('click', () => this.saveDrawing());
-    // (Optional: if you have a separate load button, bind it here.)
   }
   
-  // Pointer event wrappers.
   onPointerDown(e) {
     e.preventDefault();
     e.target.setPointerCapture(e.pointerId);
