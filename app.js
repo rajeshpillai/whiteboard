@@ -18,7 +18,7 @@ class DrawingElement {
 }
 
 class StrokeElement extends DrawingElement {
-  constructor(points, color, lineWidth, penType, smoothingEnabled = false) {
+  constructor(points, color, lineWidth, penType, smoothingEnabled = false, smoothingFactor = 0.6) {
     super();
     this.points = points || [];
     this.smoothedPoints = [];
@@ -27,7 +27,7 @@ class StrokeElement extends DrawingElement {
     this.penType = penType || "round";
     this.opacityCache = {}; 
     this.smoothingEnabled = smoothingEnabled; // ✅ Toggle smoothing
-    this.smoothingFactor = 0.6; // ✅ Adjust this for smoothness level
+    this.smoothingFactor = smoothingFactor; // ✅ Adjust via slider
   }
 
   draw(ctx) {
@@ -80,6 +80,7 @@ class StrokeElement extends DrawingElement {
   /**
    * ✅ Uses Catmull-Rom spline-like smoothing based on cubic Bézier interpolation.
    * ✅ Only applies smoothing if `this.smoothingEnabled` is true.
+   * ✅ Smoothness is controlled dynamically by the user.
    */
   getSmoothStroke() {
     if (!this.smoothingEnabled || this.points.length < 3) return this.points;
@@ -97,6 +98,7 @@ class StrokeElement extends DrawingElement {
       let xc2 = (curr.x + next.x) / 2;
       let yc2 = (curr.y + next.y) / 2;
 
+      // ✅ Adjust smoothing factor dynamically
       let smoothX = curr.x * this.smoothingFactor + xc2 * (1 - this.smoothingFactor);
       let smoothY = curr.y * this.smoothingFactor + yc2 * (1 - this.smoothingFactor);
 
@@ -105,6 +107,13 @@ class StrokeElement extends DrawingElement {
 
     smoothed.push(this.points[this.points.length - 1]);
     return smoothed;
+  }
+
+  /**
+   * ✅ Updates smoothness dynamically when slider changes.
+   */
+  updateSmoothness(smoothFactor) {
+    this.smoothingFactor = smoothFactor;
   }
 
   /**
@@ -141,114 +150,6 @@ class StrokeElement extends DrawingElement {
   }
 }
 
-
-
-
-// A freehand stroke element.
-class StrokeElement2XXX extends DrawingElement {
-  constructor(points, color, lineWidth, penType) {
-    super();
-    this.points = points || [];
-    this.color = color; // ✅ Store the latest selected color
-    this.lineWidth = lineWidth;
-    this.penType = penType || "round"; // "round", "flat", or "brush"
-    this.opacityCache = {}; // ✅ Cache opacity per stroke session
-  }
-
-  draw(ctx) {
-    if (this.points.length < 2) return;
-
-    ctx.save();
-    ctx.lineCap = this.penType === "round" ? "round" : "butt";
-    ctx.lineJoin = this.penType === "round" ? "round" : "miter";
-    ctx.beginPath();
-    ctx.moveTo(this.points[0].x, this.points[0].y);
-
-    for (let i = 1; i < this.points.length; i++) {
-        let p1 = this.points[i - 1];
-        let p2 = this.points[i];
-
-        if (this.penType === "brush") {
-            let width = this.lineWidth * (p2.pressure || 1);
-            let opacity = Math.min(1, 0.3 + (p2.pressure || 1) * 0.7);
-
-            // ✅ Always use the latest color per stroke
-            let cacheKey = `${this.color}-${width}-${opacity}`;
-
-            if (!this.opacityCache[cacheKey]) {
-                this.opacityCache[cacheKey] = `rgba(${this.hexToRgb(this.color)}, ${opacity})`;
-            }
-
-            console.log("COLOR: ", this.opacityCache[cacheKey]);
-            ctx.lineWidth = Math.max(1, width);
-            ctx.strokeStyle = this.opacityCache[cacheKey]; // ✅ Always uses the latest color
-        } else {
-            ctx.lineWidth = this.lineWidth;
-            ctx.strokeStyle = this.color;
-        }
-
-        ctx.lineTo(p2.x, p2.y);
-    }
-
-    ctx.stroke();
-    ctx.restore();
-  }
-
-
-  // ✅ Allow dynamic updates to color
-  updateColor(newColor) {
-    this.color = newColor;
-    this.opacityCache = {}; // ✅ Clear cache to apply the new color immediately
-  }
-
-  containsPoint(x, y) {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    this.points.forEach(pt => {
-      minX = Math.min(minX, pt.x);
-      minY = Math.min(minY, pt.y);
-      maxX = Math.max(maxX, pt.x);
-      maxY = Math.max(maxY, pt.y);
-    });
-
-    const pad = 5;
-    return (
-      x >= minX - pad &&
-      x <= maxX + pad &&
-      y >= minY - pad &&
-      y <= maxY + pad
-    );
-  }
-
-  move(dx, dy) {
-    this.points = this.points.map(pt => ({
-      x: pt.x + dx,
-      y: pt.y + dy,
-      pressure: pt.pressure,
-    }));
-  }
-
-  addPoint(pos, currentColor) {
-    // ✅ Update color in real-time
-    this.color = currentColor;
-
-    if (this.points.length > 0) {
-      const prevPoint = this.points[this.points.length - 1];
-      let dx = pos.x - prevPoint.x;
-      let dy = pos.y - prevPoint.y;
-      let distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 2) return; // ✅ Only add points if movement is significant
-    }
-
-    this.points.push(pos);
-  }
-
-  simplify() {
-    if (this.points.length > 500) {
-      this.points = this.points.filter((_, i) => i % 2 === 0); // ✅ Keep every second point
-    }
-  }
-}
 
 
 // Rectangle element.
@@ -342,7 +243,7 @@ class Whiteboard {
     this.currentTool = "pen";
     this.currentPenType = "round"; // default
 
-    this.brushSmoothness = 0.5; // Default smoothness
+    this.smoothingFactor = 0.5; // Default smoothness
     this.smoothingEnabled = false;
 
     this.pressureEnabled = false; // Default: ON
@@ -516,8 +417,13 @@ class Whiteboard {
     });
   
     document.getElementById('smoothness').addEventListener('input', (e) => {
-      this.brushSmoothness = parseFloat(e.target.value);
-      document.getElementById('smoothnessValue').textContent = this.brushSmoothness;
+      this.smoothingFactor = parseFloat(e.target.value);
+      document.getElementById('smoothnessValue').textContent = this.smoothingFactor;
+        // ✅ Apply smoothness dynamically to active stroke
+      if (this.currentElement instanceof StrokeElement && this.currentPenType === "brush") {
+          this.currentElement.updateSmoothness(this.smoothingFactor);
+      }
+
     });
   
 
@@ -720,7 +626,7 @@ class Whiteboard {
     } else if (this.currentTool === "pen" || this.currentTool === "eraser") {
         let col = this.currentTool === "eraser" ? "#fff" : this.currentColor;
         let lw = this.currentTool === "eraser" ? this.eraserLineWidth : this.penLineWidth;
-        this.currentElement = new StrokeElement([], col, lw, this.currentPenType);
+        this.currentElement = new StrokeElement([], col, lw, this.currentPenType, this.smoothingEnabled, this.smoothingFactor);
         this.currentElement.points.push(pos);
     } else if (this.currentTool === "rect") {
         this.currentElement = new RectElement(pos.x, pos.y, 0, 0, this.currentColor);
