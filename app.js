@@ -117,6 +117,7 @@ class Whiteboard {
     this.currentElement = null;
     // The element selected in select mode.
     this.selectedElement = null;
+
     // Variables to track dragging in select mode.
     this.isDraggingSelected = false;
     this.lastMousePos = null;
@@ -127,6 +128,12 @@ class Whiteboard {
     this.panStart = { x: 0, y: 0 };
     this.initialScrollLeft = 0;
     this.initialScrollTop = 0;
+
+    // Select region
+    this.isSelecting = false;  // Whether we are in selection mode
+    this.selectionRect = null;  // Stores the selection rectangle coordinates
+    this.selectedElements = []; // Stores multiple selected elements
+
 
     // Default drawing settings.
     this.penLineWidth = 2;
@@ -163,19 +170,33 @@ class Whiteboard {
   redraw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.elements.forEach(el => el.draw(this.ctx));
+
+    // Draw the currently active element (so we see drawing as we move the mouse)
     if (this.currentElement) {
-      this.currentElement.draw(this.ctx);
+        this.currentElement.draw(this.ctx);
     }
-    if (this.selectedElement) {
-      this.ctx.save();
-      this.ctx.strokeStyle = 'blue';
-      this.ctx.lineWidth = 2;
-      let bb = this.getBoundingBox(this.selectedElement);
-      this.ctx.strokeRect(bb.x, bb.y, bb.w, bb.h);
-      this.ctx.restore();
+
+    // Draw selection rectangle (if selecting)
+    if (this.isSelecting && this.selectionRect) {
+        this.ctx.save();
+        this.ctx.strokeStyle = 'blue';
+        this.ctx.lineWidth = 1;
+        this.ctx.setLineDash([5, 5]); // Dashed lines
+        this.ctx.strokeRect(this.selectionRect.x, this.selectionRect.y, this.selectionRect.w, this.selectionRect.h);
+        this.ctx.restore();
     }
+
+    // Highlight selected elements
+    this.selectedElements.forEach(el => {
+        this.ctx.save();
+        this.ctx.strokeStyle = 'blue';
+        this.ctx.lineWidth = 2;
+        let bb = this.getBoundingBox(el);
+        this.ctx.strokeRect(bb.x, bb.y, bb.w, bb.h);
+        this.ctx.restore();
+    });
   }
-  
+
   // Returns a simple bounding box for an element.
   getBoundingBox(el) {
     if (el instanceof StrokeElement) {
@@ -205,14 +226,18 @@ class Whiteboard {
   
   // Delete the currently selected element.
   deleteSelected() {
-    if (this.selectedElement) {
-      this.elements = this.elements.filter(el => el !== this.selectedElement);
-      this.selectedElement = null;
-      this.redraw();
+    if (this.selectedElements.length > 0) {
+        this.elements = this.elements.filter(el => !this.selectedElements.includes(el));
+        this.selectedElements = [];
+    } else if (this.selectedElement) {
+        this.elements = this.elements.filter(el => el !== this.selectedElement);
+        this.selectedElement = null;
     } else {
-      alert("No element selected for deletion.");
+        alert("No elements selected.");
     }
+    this.redraw();
   }
+
   
   // Save the current drawing (vector data and preview) to localStorage.
   saveDrawing() {
@@ -311,10 +336,11 @@ class Whiteboard {
     
     // Bind keyboard delete.
     document.addEventListener('keydown', (e) => {
-      if (e.key === "Delete" && this.selectedElement) {
-        this.deleteSelected();
+      if (e.key === "Delete" && (this.selectedElement || this.selectedElements.length > 0)) {
+          this.deleteSelected();
       }
     });
+  
     
     // Settings popovers.
     document.getElementById('penLineWidthIcon').addEventListener('click', () => {
@@ -382,74 +408,91 @@ class Whiteboard {
   
   onMouseDown(e) {
     let pos = this.getMousePos(e);
-    if (this.currentTool === "select") {
-      for (let i = this.elements.length - 1; i >= 0; i--) {
-        if (this.elements[i].containsPoint(pos.x, pos.y)) {
-          this.selectedElement = this.elements[i];
-          this.lastMousePos = pos;
-          this.isDraggingSelected = true;
-          break;
+
+    if (this.currentTool === "select-rect") {
+        // Start drawing the selection rectangle
+        this.isSelecting = true;
+        this.selectionRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
+    } else if (this.currentTool === "select") {
+        // Check if clicking inside selected elements
+        let clickedInside = this.selectedElements.some(el => el.containsPoint(pos.x, pos.y));
+
+        if (clickedInside) {
+            this.isDraggingMultiple = true;
+            this.lastMousePos = pos;
+        } else {
+            // If clicked outside, clear selection
+            this.selectedElements = [];
+            this.redraw();
         }
-      }
-    } else if (this.currentTool === "pan") {
-      this.isPanning = true;
-      this.panStart = { x: pos.x, y: pos.y };
-      this.initialScrollLeft = this.container.scrollLeft;
-      this.initialScrollTop = this.container.scrollTop;
     } else if (this.currentTool === "pen" || this.currentTool === "eraser") {
-      let col = (this.currentTool === "eraser") ? "#fff" : this.currentColor;
-      let lw = (this.currentTool === "eraser") ? this.eraserLineWidth : this.penLineWidth;
-      this.currentElement = new StrokeElement([], col, lw, this.currentPenType);
-      this.currentElement.points.push(pos);
+        let col = this.currentTool === "eraser" ? "#fff" : this.currentColor;
+        let lw = this.currentTool === "eraser" ? this.eraserLineWidth : this.penLineWidth;
+        this.currentElement = new StrokeElement([], col, lw, this.currentPenType);
+        this.currentElement.points.push(pos);
     } else if (this.currentTool === "rect") {
-      this.currentElement = new RectElement(pos.x, pos.y, 0, 0, this.currentColor);
+        this.currentElement = new RectElement(pos.x, pos.y, 0, 0, this.currentColor);
     } else if (this.currentTool === "circle") {
-      this.currentElement = new CircleElement(pos.x, pos.y, 0, this.currentColor);
+        this.currentElement = new CircleElement(pos.x, pos.y, 0, this.currentColor);
+    }
+    this.redraw();
+  }
+
+  
+  onMouseMove(e) {
+    let pos = this.getMousePos(e);
+
+    if (this.isSelecting && this.selectionRect) {
+        // Update the selection rectangle size
+        this.selectionRect.w = pos.x - this.selectionRect.x;
+        this.selectionRect.h = pos.y - this.selectionRect.y;
+    } else if (this.isDraggingMultiple) {
+        // Move all selected elements together
+        let dx = pos.x - this.lastMousePos.x;
+        let dy = pos.y - this.lastMousePos.y;
+        this.selectedElements.forEach(el => el.move(dx, dy));
+        this.lastMousePos = pos;
+    } else if (this.currentElement) {
+        if (this.currentTool === "pen" || this.currentTool === "eraser") {
+            this.currentElement.points.push(pos);
+        } else if (this.currentTool === "rect") {
+            this.currentElement.w = pos.x - this.currentElement.x;
+            this.currentElement.h = pos.y - this.currentElement.y;
+        } else if (this.currentTool === "circle") {
+            let dx = pos.x - this.currentElement.x;
+            let dy = pos.y - this.currentElement.y;
+            this.currentElement.radius = Math.sqrt(dx * dx + dy * dy);
+        }
     }
     this.redraw();
   }
   
-  onMouseMove(e) {
-    let pos = this.getMousePos(e);
-    if (this.currentTool === "select" && this.selectedElement && this.isDraggingSelected) {
-      let dx = pos.x - this.lastMousePos.x;
-      let dy = pos.y - this.lastMousePos.y;
-      this.selectedElement.move(dx, dy);
-      this.lastMousePos = pos;
-      this.redraw();
-    } else if (this.currentTool === "pan" && this.isPanning) {
-      let dx = pos.x - this.panStart.x;
-      let dy = pos.y - this.panStart.y;
-      this.container.scrollLeft = this.initialScrollLeft - dx;
-      this.container.scrollTop = this.initialScrollTop - dy;
-    } else if (this.currentElement) {
-      if (this.currentTool === "pen" || this.currentTool === "eraser") {
-        this.currentElement.points.push(pos);
-      } else if (this.currentTool === "rect") {
-        this.currentElement.w = pos.x - this.currentElement.x;
-        this.currentElement.h = pos.y - this.currentElement.y;
-      } else if (this.currentTool === "circle") {
-        let dx = pos.x - this.currentElement.x;
-        let dy = pos.y - this.currentElement.y;
-        this.currentElement.radius = Math.sqrt(dx * dx + dy * dy);
-      }
-      this.redraw();
-    }
-  }
-  
   onMouseUp(e) {
-    if (this.currentTool === "select") {
-      this.isDraggingSelected = false;
-    } else if (this.currentTool === "pan") {
-      this.isPanning = false;
+    if (this.isSelecting) {
+        // Find elements inside the selection rectangle
+        this.selectedElements = this.elements.filter(el => this.isInsideSelection(el, this.selectionRect));
+        this.isSelecting = false;
+    } else if (this.isDraggingMultiple) {
+        this.isDraggingMultiple = false;
     } else if (this.currentElement) {
-      if (this.currentTool === "pen" || this.currentTool === "eraser" ||
-          this.currentTool === "rect" || this.currentTool === "circle") {
-        this.elements.push(this.currentElement);
-      }
-      this.currentElement = null;
-      this.redraw();
+        if (this.currentTool === "pen" || this.currentTool === "eraser" ||
+            this.currentTool === "rect" || this.currentTool === "circle") {
+            this.elements.push(this.currentElement);
+        }
+        this.currentElement = null;
     }
+    this.redraw();
+  }
+
+
+  isInsideSelection(el, rect) {
+    let bb = this.getBoundingBox(el);
+    return (
+        bb.x >= rect.x && 
+        bb.y >= rect.y &&
+        bb.x + bb.w <= rect.x + rect.w &&
+        bb.y + bb.h <= rect.y + rect.h
+    );
   }
 }
 
