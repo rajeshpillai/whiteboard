@@ -108,6 +108,9 @@ class Whiteboard {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
 
+    // We'll assume the canvas is wrapped in a container with id "canvas-container".
+    this.container = document.getElementById('canvas-container');
+
     // Array to hold finished drawing elements.
     this.elements = [];
     // The element currently being drawn.
@@ -119,23 +122,31 @@ class Whiteboard {
     this.lastMousePos = null;
     this.selectionOffset = { dx: 0, dy: 0 };
 
+    // Variables for pan mode.
+    this.isPanning = false;
+    this.panStart = { x: 0, y: 0 };
+    this.initialScrollLeft = 0;
+    this.initialScrollTop = 0;
+
     // Default drawing settings.
     this.penLineWidth = 2;
     this.eraserLineWidth = 10;
     this.currentColor = '#000000';
 
-    // Tools: "pen", "rect", "circle", "eraser", "select"
+    // Tools: "pen", "rect", "circle", "eraser", "select", "pan"
     // For pen, currentPenType can be "round", "flat", or "brush"
     this.currentTool = "pen";
     this.currentPenType = "round"; // default
 
+    // Set a large fixed canvas size in CSS; do not change it on window resize.
+    // (The CSS sets #whiteboard { width: 3000px; height: 3000px; } )
     this.resize();
     window.addEventListener('resize', () => this.resize());
     
     this.bindEvents();
     this.redraw();
     
-    // If a drawing id is provided in URL parameters, load that drawing.
+    // Optionally load drawing via URL parameters.
     const params = new URLSearchParams(window.location.search);
     const drawingId = params.get('id');
     if (drawingId) {
@@ -144,12 +155,11 @@ class Whiteboard {
   }
   
   resize() {
-    this.canvas.width = window.innerWidth - 150;
-    this.canvas.height = window.innerHeight - 40;
+    // Since the canvas is set in CSS to a large fixed size, do not reset its width/height.
     this.redraw();
   }
   
-  // Redraws all elements.
+  // Redraw all elements.
   redraw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.elements.forEach(el => el.draw(this.ctx));
@@ -266,7 +276,7 @@ class Whiteboard {
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         this.currentTool = btn.dataset.tool;
-        if (this.currentTool === "select") {
+        if (this.currentTool === "select" || this.currentTool === "pan") {
           this.canvas.style.cursor = "move";
         } else {
           this.canvas.style.cursor = "crosshair";
@@ -285,27 +295,21 @@ class Whiteboard {
         this.redraw();
       });
     });
-
-    // Bind the Delete button separately.
-    document.getElementById('delete').addEventListener('click', () => {
-      e.stopPropagation();  // Prevent any parent events from firing
-      this.deleteSelected();
-    });
-
     
-    // New Drawing button.
+    // Bind the New Drawing button.
     document.getElementById('newDrawing').addEventListener('click', () => {
       if (confirm("Start a new drawing? Your current drawing will be lost.")) {
         this.newDrawing();
       }
     });
     
-    // Delete button.
-    document.getElementById('delete').addEventListener('click', () => {
+    // Bind the Delete button.
+    document.getElementById('delete').addEventListener('click', (e) => {
+      e.stopPropagation();
       this.deleteSelected();
     });
     
-    // Add keyboard listener for Delete key.
+    // Bind keyboard delete.
     document.addEventListener('keydown', (e) => {
       if (e.key === "Delete" && this.selectedElement) {
         this.deleteSelected();
@@ -346,8 +350,12 @@ class Whiteboard {
     
     // Save button.
     document.getElementById('save').addEventListener('click', () => this.saveDrawing());
+    
+    // Bind Pan tool events (Pan tool button should have data-tool="pan").
+    // (The generic tool buttons binding above will set this.currentTool to "pan" when clicked.)
   }
   
+  // Pointer event wrappers.
   onPointerDown(e) {
     e.preventDefault();
     e.target.setPointerCapture(e.pointerId);
@@ -363,13 +371,14 @@ class Whiteboard {
   }
   
   getMousePos(e) {
-    const rect = this.canvas.getBoundingClientRect();
+    const containerRect = this.container.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: e.clientX - containerRect.left + this.container.scrollLeft,
+      y: e.clientY - containerRect.top + this.container.scrollTop,
       pressure: (e.pressure !== undefined && e.pressure > 0) ? e.pressure : 1
     };
   }
+  
   
   onMouseDown(e) {
     let pos = this.getMousePos(e);
@@ -382,6 +391,11 @@ class Whiteboard {
           break;
         }
       }
+    } else if (this.currentTool === "pan") {
+      this.isPanning = true;
+      this.panStart = { x: pos.x, y: pos.y };
+      this.initialScrollLeft = this.container.scrollLeft;
+      this.initialScrollTop = this.container.scrollTop;
     } else if (this.currentTool === "pen" || this.currentTool === "eraser") {
       let col = (this.currentTool === "eraser") ? "#fff" : this.currentColor;
       let lw = (this.currentTool === "eraser") ? this.eraserLineWidth : this.penLineWidth;
@@ -403,6 +417,11 @@ class Whiteboard {
       this.selectedElement.move(dx, dy);
       this.lastMousePos = pos;
       this.redraw();
+    } else if (this.currentTool === "pan" && this.isPanning) {
+      let dx = pos.x - this.panStart.x;
+      let dy = pos.y - this.panStart.y;
+      this.container.scrollLeft = this.initialScrollLeft - dx;
+      this.container.scrollTop = this.initialScrollTop - dy;
     } else if (this.currentElement) {
       if (this.currentTool === "pen" || this.currentTool === "eraser") {
         this.currentElement.points.push(pos);
@@ -421,6 +440,8 @@ class Whiteboard {
   onMouseUp(e) {
     if (this.currentTool === "select") {
       this.isDraggingSelected = false;
+    } else if (this.currentTool === "pan") {
+      this.isPanning = false;
     } else if (this.currentElement) {
       if (this.currentTool === "pen" || this.currentTool === "eraser" ||
           this.currentTool === "rect" || this.currentTool === "circle") {

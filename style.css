@@ -21,6 +21,7 @@ body, html {
   border-bottom: 1px solid #ccc;
 }
 
+/* Color button styling */
 .color-btn {
   width: 24px;
   height: 24px;
@@ -29,7 +30,6 @@ body, html {
   margin-right: 5px;
   cursor: pointer;
 }
-
 .color-btn.active {
   border: 2px solid #000;
 }
@@ -45,9 +45,10 @@ body, html {
   border-right: 1px solid #ccc;
   padding: 10px;
   box-sizing: border-box;
-  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-y: auto;  /* Enables scrolling if needed */
 }
 
+/* Tool button styling */
 .tool-btn {
   display: block;
   width: 100%;
@@ -57,11 +58,9 @@ body, html {
   border: none;
   background-color: #ddd;
 }
-
 .tool-btn.active {
   background-color: #bbb;
 }
-
 .tool-icon {
   margin-left: 5px;
   cursor: pointer;
@@ -74,13 +73,21 @@ body, html {
   margin-top: 5px;
 }
 
-/* Canvas styling */
-#whiteboard {
+/* Canvas container for large whiteboard */
+#canvas-container {
   position: absolute;
   left: 150px;
   top: 40px;
   right: 0;
   bottom: 0;
+  overflow: auto;
+  background-color: #fff;
+}
+
+/* The canvas itself */
+#whiteboard {
+  /* Set a large default size */
+  display: block;
   background-color: #fff;
   cursor: crosshair;
   touch-action: none;

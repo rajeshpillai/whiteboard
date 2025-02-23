@@ -27,12 +27,11 @@
     <button id="tool-circle" class="tool-btn" data-tool="circle">Circle</button>
     <button id="tool-eraser" class="tool-btn" data-tool="eraser">Eraser</button>
     <hr>
-    <!-- New Select mode -->
     <button id="tool-select" class="tool-btn" data-tool="select">Select</button>
+    <button id="tool-pan" class="tool-btn" data-tool="pan">Pan</button>
     <hr>
-    <!-- New Drawing button -->
     <button id="newDrawing" class="tool-btn">New Drawing</button>
-    <button id="delete" class="tool-btn">X</button>
+    <button id="delete" class="tool-btn">Delete</button>
     <hr>
     <!-- Pen and eraser settings -->
     <div id="pen-settings">
@@ -52,13 +51,14 @@
     <hr>
     <button id="save" class="tool-btn">Save</button>
     <br>
-    <!-- Optionally include a Load button if needed -->
-    <!-- <button id="load" class="tool-btn">Load</button> -->
-    <br>
     <a href="gallery.html" id="gallery-link">Gallery</a>
   </div>
 
-  <canvas id="whiteboard"></canvas>
-  <script src="./app.js"></script>
+  <!-- Canvas container for scrollable large whiteboard -->
+  <div id="canvas-container">
+    <canvas id="whiteboard" width="3000" height="3000"></canvas>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
