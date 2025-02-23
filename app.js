@@ -1,8 +1,11 @@
 // Base class for drawn elements.
 class DrawingElement {
   draw(ctx) { }
+  
   containsPoint(x, y) { return false; }
+  
   move(dx, dy) { }
+  
   hexToRgb(hex) {
     hex = hex.replace(/^#/, '');
     let bigint = parseInt(hex, 16);
@@ -18,60 +21,58 @@ class DrawingElement {
 class StrokeElement extends DrawingElement {
   constructor(points, color, lineWidth, penType) {
     super();
-    this.points = points; // Array of {x, y, pressure?}
-    this.color = color;
+    this.points = points || [];
+    this.color = color; // ✅ Store the latest selected color
     this.lineWidth = lineWidth;
-    this.penType = penType; // "round", "flat", or "brush"
+    this.penType = penType || "round"; // "round", "flat", or "brush"
+    this.opacityCache = {}; // ✅ Cache opacity per stroke session
   }
 
   draw(ctx) {
     if (this.points.length < 2) return;
-    ctx.save();
-    ctx.strokeStyle = this.color;
-    ctx.lineCap = this.penType === "round" ? 'round' : 'butt';
-    ctx.lineJoin = this.penType === "round" ? 'round' : 'miter';
 
+    ctx.save();
+    ctx.lineCap = this.penType === "round" ? "round" : "butt";
+    ctx.lineJoin = this.penType === "round" ? "round" : "miter";
     ctx.beginPath();
     ctx.moveTo(this.points[0].x, this.points[0].y);
 
-    if (this.penType === "brush" && this.points.length > 3) {
-        for (let i = 1; i < this.points.length - 2; i++) {
-            let p0 = this.points[i - 1];
-            let p1 = this.points[i];
-            let p2 = this.points[i + 1];
+    for (let i = 1; i < this.points.length; i++) {
+        let p1 = this.points[i - 1];
+        let p2 = this.points[i];
 
-            // Apply pressure to both width and opacity
-            let pressure = this.pressureEnabled ? (p1.pressure || 1) : 1;
+        if (this.penType === "brush") {
+            let width = this.lineWidth * (p2.pressure || 1);
+            let opacity = Math.min(1, 0.3 + (p2.pressure || 1) * 0.7);
 
-            let width = this.lineWidth * pressure;
-            let opacity = Math.min(1, 0.3 + pressure * 0.7); // Adjust opacity mapping
+            // ✅ Always use the latest color per stroke
+            let cacheKey = `${this.color}-${width}-${opacity}`;
 
+            if (!this.opacityCache[cacheKey]) {
+                this.opacityCache[cacheKey] = `rgba(${this.hexToRgb(this.color)}, ${opacity})`;
+            }
+
+            console.log("COLOR: ", this.opacityCache[cacheKey]);
             ctx.lineWidth = Math.max(1, width);
-            let sStyle = `rgba(${this.hexToRgb(this.color)}, ${opacity})`; // Apply opacity
-            ctx.strokeStyle = sStyle;
-
-            console.log("Opacity: ", opacity, sStyle);
-
-            let xc1 = (p0.x + p1.x) / 2;
-            let yc1 = (p0.y + p1.y) / 2;
-            let xc2 = (p1.x + p2.x) / 2;
-            let yc2 = (p1.y + p2.y) / 2;
-
-            ctx.quadraticCurveTo(p1.x, p1.y, xc2, yc2);
+            ctx.strokeStyle = this.opacityCache[cacheKey]; // ✅ Always uses the latest color
+        } else {
+            ctx.lineWidth = this.lineWidth;
+            ctx.strokeStyle = this.color;
         }
-    } else {
-        ctx.lineWidth = this.lineWidth; // Ensure fixed width for round & flat pens
-        ctx.strokeStyle = this.color;  // Fixed color (No opacity changes)
 
-        for (let i = 1; i < this.points.length; i++) {
-            ctx.lineTo(this.points[i].x, this.points[i].y);
-        }
+        ctx.lineTo(p2.x, p2.y);
     }
 
     ctx.stroke();
     ctx.restore();
   }
 
+
+  // ✅ Allow dynamic updates to color
+  updateColor(newColor) {
+    this.color = newColor;
+    this.opacityCache = {}; // ✅ Clear cache to apply the new color immediately
+  }
 
   containsPoint(x, y) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -81,17 +82,47 @@ class StrokeElement extends DrawingElement {
       maxX = Math.max(maxX, pt.x);
       maxY = Math.max(maxY, pt.y);
     });
+
     const pad = 5;
-    return (x >= minX - pad && x <= maxX + pad && y >= minY - pad && y <= maxY + pad);
+    return (
+      x >= minX - pad &&
+      x <= maxX + pad &&
+      y >= minY - pad &&
+      y <= maxY + pad
+    );
   }
+
   move(dx, dy) {
     this.points = this.points.map(pt => ({
       x: pt.x + dx,
       y: pt.y + dy,
-      pressure: pt.pressure
+      pressure: pt.pressure,
     }));
   }
+
+  addPoint(pos, currentColor) {
+    // ✅ Update color in real-time
+    this.color = currentColor;
+
+    if (this.points.length > 0) {
+      const prevPoint = this.points[this.points.length - 1];
+      let dx = pos.x - prevPoint.x;
+      let dy = pos.y - prevPoint.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 2) return; // ✅ Only add points if movement is significant
+    }
+
+    this.points.push(pos);
+  }
+
+  simplify() {
+    if (this.points.length > 500) {
+      this.points = this.points.filter((_, i) => i % 2 === 0); // ✅ Keep every second point
+    }
+  }
 }
+
 
 // Rectangle element.
 class RectElement extends DrawingElement {
@@ -185,7 +216,7 @@ class Whiteboard {
     this.currentPenType = "round"; // default
 
     this.brushSmoothness = 0.5; // Default smoothness
-    this.smoothingEnabled = true;
+    this.smoothingEnabled = false;
 
     this.pressureEnabled = false; // Default: ON
 
@@ -216,7 +247,11 @@ class Whiteboard {
   // Redraw all elements.
   redraw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.elements.forEach(el => el.draw(this.ctx));
+  
+    // ✅ Only redraw visible strokes to improve performance
+    for (let i = Math.max(0, this.elements.length - 500); i < this.elements.length; i++) {
+      this.elements[i].draw(this.ctx);
+    }
 
     // Draw the currently active element (so we see drawing as we move the mouse)
     if (this.currentElement) {
@@ -329,6 +364,12 @@ class Whiteboard {
       alert('Drawing not found!');
     }
   }
+
+  colorToHex(color) {
+    let ctx = document.createElement("canvas").getContext("2d");
+    ctx.fillStyle = color;
+    return ctx.fillStyle; // ✅ Converts named colors to hex
+  }
   
   bindEvents() {
     if (window.PointerEvent) {
@@ -361,12 +402,15 @@ class Whiteboard {
     const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
     toolButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        this.currentTool = btn.dataset.tool;
-        
         // ✅ Reset the current drawing element when switching tools
-        if (this.currentTool !== "pen" || this.currentPenType !== "brush") {
-          this.currentElement = null;
+        if (this.currentPenType === "brush" && this.currentElement) {
+          console.log("Saving brush stroke before switching...");
+          this.elements.push(this.currentElement); // ✅ Save the last brush stroke
+          this.currentElement = null; // ✅ Reset the brush stroke AFTER saving
+          this.redraw();
         }
+
+        this.currentTool = btn.dataset.tool;
 
         if (this.currentTool === "select" || this.currentTool === "pan") {
           this.canvas.style.cursor = "move";
@@ -384,16 +428,9 @@ class Whiteboard {
         this.selectedElement = null;
         this.selectedElements = [];
 
-        // ✅ Ensure brush-specific memory is cleared when switching away
-        if (this.currentPenType !== "brush") {
-          this.elements = this.elements.filter(el => !(el instanceof StrokeElement && el.penType === "brush"));
-        }
-
         // Highlight the selected tool
         document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-
-        this.redraw();
       });
     });
     
@@ -423,9 +460,13 @@ class Whiteboard {
       let sel = document.getElementById('penLineWidthSelector');
       sel.style.display = (sel.style.display === 'block') ? 'none' : 'block';
     });
+    
     document.getElementById('penWidth').addEventListener('input', (e) => {
       this.penLineWidth = parseInt(e.target.value, 10);
+      document.getElementById('penWidthValue').textContent = this.lineWidth; // ✅ Update UI
     });
+
+
     document.getElementById('lineWidthIcon').addEventListener('click', () => {
       let sel = document.getElementById('lineWidthSelector');
       sel.style.display = (sel.style.display === 'block') ? 'none' : 'block';
@@ -440,13 +481,19 @@ class Whiteboard {
       btn.addEventListener('click', () => {
         colorButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        this.currentColor = btn.dataset.color;
-        document.getElementById('colorPicker').value = btn.dataset.color;
+        this.currentColor = this.colorToHex(btn.dataset.color);
+        document.getElementById('colorPicker').value = this.currentColor;
         this.redraw();
       });
     });
     document.getElementById('colorPicker').addEventListener('input', (e) => {
       this.currentColor = e.target.value;
+
+      // ✅ If the current tool is brush, update its color in real-time
+      if (this.currentElement instanceof StrokeElement && this.currentPenType === "brush") {
+        this.currentElement.updateColor(this.currentColor);
+      }
+
       this.redraw();
     });
     
@@ -560,66 +607,52 @@ class Whiteboard {
   onMouseMove(e) {
     let pos = this.getMousePos(e);
 
-    console.log("mouse: ", pos);
-    //console.log(`tool: ${this.currentTool}, isSelecting: ${this.isSelecting}, selectionRect: ${this.selectionRect}, isDraggingMultiple: ${this.isDraggingMultiple}`);
+    if (!this.needsRedraw) {
+        this.needsRedraw = true;
+        requestAnimationFrame(() => {
+            this.redraw();
+            this.needsRedraw = false;
+        });
+    }
+
+    console.log("Smoothing: ", this.smoothingEnabled);
+    console.log("# of Elems: ", this.elements.length);
+    console.log("# of points in current elem: ", this.currentElement?.points);
 
     if (this.currentTool === "pen" && this.currentPenType === "brush") {
       if (!this.currentElement) return;
 
-      const now = Date.now();
       const prevPoint = this.currentElement.points[this.currentElement.points.length - 1];
 
-      if (prevPoint && this.smoothingEnabled) {
+      if (prevPoint) {
           let dx = pos.x - prevPoint.x;
           let dy = pos.y - prevPoint.y;
-          let dist = Math.sqrt(dx * dx + dy * dy);
-          let dt = now - prevPoint.time;
-          let speed = dist / (dt || 1); // Avoid division by zero
+          let distance = Math.sqrt(dx * dx + dy * dy);
 
-          // Weighted moving average (reduce jitter)
-          const alpha = this.brushSmoothness;
-          pos.x = alpha * prevPoint.x + (1 - alpha) * pos.x;
-          pos.y = alpha * prevPoint.y + (1 - alpha) * pos.y;
-
-          // Speed-based smoothing
-          const minSmooth = 0.2 * this.brushSmoothness;
-          const maxSmooth = 0.9 * this.brushSmoothness;
-          const speedFactor = Math.max(minSmooth, Math.min(maxSmooth, 1 - speed * 0.01));
-
-          pos.x = prevPoint.x * speedFactor + pos.x * (1 - speedFactor);
-          pos.y = prevPoint.y * speedFactor + pos.y * (1 - speedFactor);
+          if (distance < 2) return; // ✅ Only add points if movement is significant
       }
 
-      pos.time = now;
-      pos.pressure = e.pressure !== undefined && this.pressureEnabled ? e.pressure : 1; // Apply pressure only if enabled
-      
-      // ✅ Reduce the number of points stored to prevent lag
-      if (this.currentElement.points.length > 250) {
-        this.currentElement.points = this.currentElement.points.slice(-200); // Keep only last 200 points
-      }
-      
-      this.currentElement.points.push(pos);
-
+      pos.pressure = e.pressure !== undefined && this.pressureEnabled ? e.pressure : 1;
+      this.currentElement.addPoint(pos, this.currentColor);
     }
-
 
     if (this.currentTool === "eraser") {
-      this.elements = this.elements.map(el => {
-          if (el instanceof StrokeElement) {
-              el.points = el.points.filter(pt => 
-                  Math.sqrt((pt.x - pos.x) ** 2 + (pt.y - pos.y) ** 2) > this.eraserLineWidth
-              );
-              return el;
-          }
-          return el;
-      }).filter(el => el.points.length > 1);  // Remove strokes with no points
+        this.elements = this.elements.map(el => {
+            if (el instanceof StrokeElement) {
+                el.points = el.points.filter(pt =>
+                    Math.sqrt((pt.x - pos.x) ** 2 + (pt.y - pos.y) ** 2) > this.eraserLineWidth
+                );
+                return el;
+            }
+            return el;
+        }).filter(el => el.points.length > 1);  // Remove strokes with no points
     }
+
     if (this.currentTool === "select" && this.selectedElement && this.isDraggingSelected) {
-      let dx = pos.x - this.lastMousePos.x;
-      let dy = pos.y - this.lastMousePos.y;
-      this.selectedElement.move(dx, dy);
-      this.lastMousePos = pos;
-      this.redraw();
+        let dx = pos.x - this.lastMousePos.x;
+        let dy = pos.y - this.lastMousePos.y;
+        this.selectedElement.move(dx, dy);
+        this.lastMousePos = pos;
     } else if (this.isSelecting && this.selectionRect) {
         // Update the selection rectangle size
         this.selectionRect.w = pos.x - this.selectionRect.x;
@@ -642,11 +675,10 @@ class Whiteboard {
             this.currentElement.radius = Math.sqrt(dx * dx + dy * dy);
         }
     }
-    this.redraw();
   }
+
   
   onMouseUp(e) {
-    // TODO; 
     if (this.currentTool === "select") {
       this.isDraggingSelected = false;
       this.isDraggingMultiple = false;
@@ -661,6 +693,17 @@ class Whiteboard {
         if (this.currentTool === "pen" || this.currentTool === "eraser" ||
             this.currentTool === "rect" || this.currentTool === "circle") {
             this.elements.push(this.currentElement);
+        }
+
+        // ✅ Ensure brush strokes are also saved
+        if (this.currentTool === "pen" && this.currentPenType === "brush") {
+          console.log("Saving brush stroke...");
+          this.elements.push(this.currentElement);
+
+          // ✅ Limit stored brush strokes to the last 1000 to prevent lag
+          if (this.elements.length > 1000) {
+            this.elements = this.elements.slice(-1000);
+          }
         }
         this.currentElement = null;
     }

@@ -16,7 +16,7 @@
     <input type="color" id="colorPicker" value="#000000" title="Custom Color">
 
     <label for="smoothToggle">Enable Smoothening</label>
-    <input type="checkbox" id="smoothToggle" checked>
+    <input type="checkbox" id="smoothToggle">
 
     <label for="smoothness">Brush Smoothness:</label>
     <input type="range" id="smoothness" min="0" max="1" step="0.05" value="0.5">
@@ -53,7 +53,8 @@
       <span id="penLineWidthIcon" class="tool-icon" title="Set Pen Size">⚙️</span>
       <div id="penLineWidthSelector">
         <label for="penWidth">Pen Size:</label>
-        <input type="range" id="penWidth" min="1" max="20" value="2">
+        <input type="range" id="penWidth" min="1" max="20" value="5">
+        <span id="penWidthValue">5</span>
       </div>
     </div>
     <div id="eraser-settings">
